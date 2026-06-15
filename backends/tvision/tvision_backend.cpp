@@ -66,6 +66,10 @@ public:
         // Constructing THardwareInfo initializes its static platform pointer
         // (platf = &Platform::getInstance()); the static methods segfault without it.
         THardwareInfo::setUpConsole();
+        // TScreen's ctor does setUpConsole THEN allocateScreenBuffer — the second call
+        // sizes tvision's internal display buffer (what screenWrite blits into) and the
+        // reported screen dimensions. Without it nothing paints.
+        THardwareInfo::allocateScreenBuffer();
         last_ = curSize();
     }
     ~TvisionBackend() override { THardwareInfo::restoreConsole(); }
@@ -127,6 +131,7 @@ public:
             out.mouse.wheel = (m.wheel & mwUp) ? 1 : ((m.wheel & mwDown) ? -1 : 0);
             return true;
         }
+        THardwareInfo::allocateScreenBuffer();    // re-read size; resizes the display buffer
         Size now = curSize();
         if (now.w != last_.w || now.h != last_.h) {
             last_ = now;
