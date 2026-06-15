@@ -1,0 +1,7 @@
+/* Export ONLY the flat C ABI; hide tvision/core internals (§7, §12.2). */
+{
+    global:
+        tm_*;
+    local:
+        *;
+};
