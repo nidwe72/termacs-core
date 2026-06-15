@@ -89,6 +89,21 @@ int main() {
     app.feed(keyEv(Key::Enter));
     assert(quit);
 
+    // --- mouse: click "File" title to open the menu, click "Quit" item ---
+    {
+        quit = false;
+        InputEvent click{}; click.kind = InputKind::Mouse;
+        click.mouse.left = true; click.mouse.x = 4; click.mouse.y = 1;   // " File " region
+        app.feed(click);
+        const CellBuffer& fm = app.render();
+        dump(fm, "menu opened by mouse click");
+        assert(rowHas(fm, "Quit"));            // dropdown is visible
+        InputEvent item{}; item.kind = InputKind::Mouse;
+        item.mouse.left = true; item.mouse.x = 4; item.mouse.y = 3;       // first dropdown row
+        app.feed(item);
+        assert(quit);                          // Quit activated by mouse
+    }
+
     // --- async confirm dialog ---
     bool confirmed = false;
     app.dialogs().confirm(win, "Remove \"milk\"?", [&](bool yes) { confirmed = yes; });

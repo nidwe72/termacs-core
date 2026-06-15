@@ -314,7 +314,7 @@ void MenuBarNode::draw(Core& core, Canvas& cv, const Theme& th) {
         Style st = active ? th.get(Role::MenuBarSel) : bar;
         std::string label = " " + m->title + " ";
         cv.drawText(x, bounds.y, label, st);
-        m->bounds.x = x;                 // remember x for the dropdown
+        m->bounds = {x, bounds.y, (int)label.size(), 1};   // clickable title region
         x += (int)label.size() + 1;
     }
 }
@@ -430,6 +430,7 @@ void Core::render(CellBuffer& out) {
                         for (auto& it : m->items) mw = std::max(mw, (int)it.label.size());
                         mw += 4;
                         Rect db{m->bounds.x, mb->bounds.y + 1, mw, (int)m->items.size() + 2};
+                        m->popup = db;             // for mouse hit-testing
                         cv.fill(db, theme.get(Role::MenuBg));
                         cv.box(db, theme.get(Role::MenuBg));
                         for (size_t i = 0; i < m->items.size(); ++i) {
@@ -480,6 +481,71 @@ bool Core::dispatchKey(const KeyEvent& ev) {
     if (ev.key == Key::BackTab) { focusStep(-1); return true; }
     // 4. focused widget
     if (Node* f = resolve(focused)) return f->handleKey(*this, ev);
+    return false;
+}
+
+NodeId Core::hitTest(NodeId id, int x, int y) {
+    Node* n = resolve(id);
+    if (!n || !n->visible || !n->bounds.contains(x, y)) return {};
+    for (auto it = n->children.rbegin(); it != n->children.rend(); ++it) {
+        NodeId h = hitTest(*it, x, y);
+        if (resolve(h)) return h;            // deepest/topmost child wins
+    }
+    return id;
+}
+
+bool Core::dispatchMouse(const MouseEvent& ev) {
+    if (!ev.left) return false;              // act on left press only
+    if (!popups.empty()) return false;       // dialogs are keyboard-driven for now
+    WindowNode* w = windows.empty() ? nullptr : as<WindowNode>(windows.back());
+    if (!w) return false;
+    int mx = ev.x, my = ev.y;
+
+    if (MenuBarNode* mb = as<MenuBarNode>(w->menuBar)) {
+        // 1. click inside an open dropdown -> activate that item
+        if (mb->open >= 0) {
+            if (MenuNode* m = as<MenuNode>(mb->menus[mb->open])) {
+                if (m->popup.contains(mx, my)) {
+                    int row = my - (m->popup.y + 1);
+                    if (row >= 0 && row < (int)m->items.size()) {
+                        auto fn = m->items[row].onActivate;
+                        mb->open = -1;
+                        if (fn) fn();
+                    }
+                    return true;
+                }
+            }
+        }
+        // 2. click on a menu title -> open/close that menu
+        if (Node* mbn = resolve(w->menuBar)) {
+            if (my == mbn->bounds.y) {
+                for (size_t i = 0; i < mb->menus.size(); ++i) {
+                    MenuNode* m = as<MenuNode>(mb->menus[i]);
+                    if (m && mx >= m->bounds.x && mx < m->bounds.x + m->bounds.w) {
+                        mb->open = (mb->open == (int)i) ? -1 : (int)i;
+                        if (mb->open >= 0) m->sel = 0;
+                        return true;
+                    }
+                }
+            }
+        }
+        // 3. click elsewhere closes an open menu
+        if (mb->open >= 0) { mb->open = -1; return true; }
+    }
+
+    // 4. click to focus / activate a widget
+    NodeId hit = hitTest(windows.back(), mx, my);
+    if (Node* n = resolve(hit)) {
+        if (n->focusable && n->enabled) {
+            setFocus(hit);
+            if (auto* b = as<ButtonNode>(hit)) b->clicked.emit();
+            else if (auto* lv = as<ListViewNode>(hit)) {
+                int r = lv->top + (my - n->bounds.y);
+                if (r >= 0 && r < (int)lv->items.size()) lv->sel = r;
+            }
+            return true;
+        }
+    }
     return false;
 }
 

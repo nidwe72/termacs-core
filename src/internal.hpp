@@ -112,6 +112,7 @@ public:
     std::string           title;
     std::vector<MenuItem> items;
     int                   sel = 0;
+    Rect                  popup{};   // dropdown rect, set during render (for hit-testing)
     // drawn as a popup when open; see Core popup handling
     void draw(Core&, Canvas&, const Theme&) override;
 };
@@ -209,7 +210,9 @@ public:
     void render(CellBuffer& out);
 
     // input
-    bool dispatchKey(const KeyEvent& ev);
+    bool   dispatchKey(const KeyEvent& ev);
+    bool   dispatchMouse(const MouseEvent& ev);
+    NodeId hitTest(NodeId root, int x, int y);
 
 private:
     void collectFocusable(NodeId id, std::vector<NodeId>& out);
