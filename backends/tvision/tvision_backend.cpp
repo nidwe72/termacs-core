@@ -10,9 +10,55 @@
 #include "termacs/tvision_backend.hpp"
 #include <string>
 #include <vector>
+#include <stdexcept>
+#include <cstdlib>
+#include <cstdio>
+#include <unistd.h>
 
 namespace termacs {
 namespace {
+
+// Terminfo guard (spec §15.2): tvision drives the terminal through ncurses/
+// terminfo (libncursesw + libtinfo are runtime deps). With no terminfo entry
+// for $TERM, tvision paints nothing / fails opaquely — so detect that up front
+// and fail with an actionable message. Side-effect free (filesystem probe over
+// the standard ncurses search path); never calls setupterm.
+void requireTerminfo() {
+    const char* termc = std::getenv("TERM");
+    const std::string term = termc ? termc : "";
+    bool ok = false;
+    if (!term.empty()) {
+        std::vector<std::string> roots;
+        if (const char* v = std::getenv("TERMINFO")) roots.emplace_back(v);
+        if (const char* home = std::getenv("HOME")) roots.emplace_back(std::string(home) + "/.terminfo");
+        if (const char* dirs = std::getenv("TERMINFO_DIRS")) {
+            std::string cur;
+            for (char c : std::string(dirs)) {
+                if (c == ':') { roots.emplace_back(cur.empty() ? "/usr/share/terminfo" : cur); cur.clear(); }
+                else cur += c;
+            }
+            roots.emplace_back(cur.empty() ? "/usr/share/terminfo" : cur);
+        }
+        for (const char* r : {"/usr/share/terminfo", "/lib/terminfo", "/etc/terminfo", "/usr/lib/terminfo"})
+            roots.emplace_back(r);
+        char hex[8];
+        std::snprintf(hex, sizeof hex, "%02x", (unsigned)(unsigned char)term[0]);
+        const std::string letter(1, term[0]);
+        for (const std::string& root : roots) {
+            if (root.empty()) continue;
+            if (::access((root + "/" + letter + "/" + term).c_str(), R_OK) == 0) { ok = true; break; }
+            if (::access((root + "/" + hex + "/" + term).c_str(), R_OK) == 0)    { ok = true; break; }
+        }
+    }
+    if (!ok) {
+        const std::string t = term.empty() ? "<unset>" : term;
+        throw std::runtime_error(
+            "termacs: no terminfo entry for TERM='" + t + "'. The terminal backend "
+            "needs ncurses/terminfo at runtime; install 'ncurses-base' (and "
+            "'ncurses-term' for uncommon terminals) or set $TERMINFO to a valid "
+            "terminfo directory.");
+    }
+}
 
 TColorDesired toDesired(const Color& c, bool fg) {
     if (c.isDefault) return fg ? TColorRGB(192, 192, 192) : TColorRGB(0, 0, 0);
@@ -63,6 +109,10 @@ Key mapKey(ushort kc) {
 class TvisionBackend : public Backend {
 public:
     TvisionBackend() {
+        // Guard: terminal plumbing (terminfo) must exist before we touch the
+        // console, else tvision fails opaquely. Throws an actionable message;
+        // the C ABI turns it into a clean error + null app handle (§15.2).
+        requireTerminfo();
         // Constructing THardwareInfo initializes its static platform pointer
         // (platf = &Platform::getInstance()); the static methods segfault without it.
         THardwareInfo::setUpConsole();
