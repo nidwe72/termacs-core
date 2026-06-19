@@ -41,7 +41,7 @@ target_link_libraries(tc_csmoke termacs)
 set_target_properties(tc_csmoke PROPERTIES LINKER_LANGUAGE CXX)
 add_test(NAME csmoke COMMAND tc_csmoke)
 
-# Shared C-ABI library (what Python/Dart load; JNI statically links it in P3)
+# Shared C-ABI library (libtermacs.so) — what the language bindings link against
 add_library(termacs_c SHARED cabi/cabi.cpp
     src/cell.cpp src/theme.cpp src/core.cpp src/widget.cpp src/application.cpp
     backends/tvision/tvision_backend.cpp)
@@ -50,23 +50,17 @@ target_link_libraries(termacs_c PRIVATE tvision)
 set_target_properties(termacs_c PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON OUTPUT_NAME termacs)
 target_link_options(termacs_c PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cabi/termacs.map")
 
-# --- JNI shim: single self-contained libtermacsjni.so (JNI + C ABI + core + tvision) ---
-find_package(JNI QUIET)
-if(JNI_FOUND)
-    add_library(termacsjni SHARED
-        ${CMAKE_CURRENT_SOURCE_DIR}/../termacs-java/native/termacs_jni.cpp
-        cabi/cabi.cpp
-        src/cell.cpp src/theme.cpp src/core.cpp src/widget.cpp src/application.cpp
-        backends/tvision/tvision_backend.cpp)
-    target_include_directories(termacsjni PRIVATE ${JNI_INCLUDE_DIRS}
-        ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    target_link_libraries(termacsjni PRIVATE tvision)
-    set_target_properties(termacsjni PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
-    target_link_options(termacsjni PRIVATE
-        "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/../termacs-java/native/jni.map")
-    message(STATUS "termacs: JNI found, building libtermacsjni")
-else()
-    message(STATUS "termacs: JNI not found, skipping libtermacsjni")
-endif()
+# NOTE: the JNI shim (libtermacsjni.so) is NO LONGER built here. Under the
+# repos-as-workspace model (spec §15.2), the JNI build is owned by termacs-java,
+# which consumes termacs-core via FetchContent. termacs-core knows nothing of
+# Java or JNI — it exposes only the public C++ headers and the C ABI.
+
 add_executable(tvterm_smoke tests/cpp/tvterm_smoke.cpp)
 target_link_libraries(tvterm_smoke termacs)
+
+# --- install / export: headers + libs consumable downstream (R0) ---
+include(GNUInstallDirs)
+install(TARGETS termacs termacs_c
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}   # libtermacs.a  (static core)
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})  # libtermacs.so (shared C ABI)
+install(DIRECTORY include/termacs DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
