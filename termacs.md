@@ -800,3 +800,5 @@ The decoupling was done once in the monorepo, the repos were seeded by force-pus
 | **R6** | **Per-repo CI** *(later)* | GitHub Actions per repo: build + test (the §12.6 matrix, now per-repo) | Green CI on all three repos | R5 |
 
 **Critical path:** R0 → R1 → R2 → R4 → R5 (R3 parallels; R6 trails). Everything before **R5** is monorepo-local and reversible.
+
+> **Cleanup (pending):** the retired monorepo's history was kept as a local backup bundle (it also holds the few root-only files — `build.sh`, the pty smoke test, the root README — though the smoke test now lives in `termacs-java-demo/tools/`). **Delete the backup bundle once the demo app is verified end-to-end on a real terminal.**
