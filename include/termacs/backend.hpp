@@ -27,6 +27,7 @@ public:
     virtual bool         pollInput(InputEvent& out, int timeoutMs) = 0;
     virtual void         wake() = 0;                 // thread-safe: unblock pollInput
     virtual void         setCursor(int x, int y, bool visible) {} // optional
+    virtual void         setClipboard(std::string_view) {}        // OSC 52 (§5.11.4); optional
     virtual void         shutdown() = 0;             // restore terminal; panic-safe
 };
 

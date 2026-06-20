@@ -102,8 +102,31 @@ Key mapKey(ushort kc) {
         case kbF4:       return Key::F4;  case kbF5: return Key::F5;  case kbF6: return Key::F6;
         case kbF7:       return Key::F7;  case kbF8: return Key::F8;  case kbF9: return Key::F9;
         case kbF10:      return Key::F10;
+        // Ctrl+arrow (word/doc navigation, §5.11) — distinct tvision keycodes
+        case kbCtrlLeft:  return Key::Left;
+        case kbCtrlRight: return Key::Right;
+        case kbCtrlHome:  return Key::Home;
+        case kbCtrlEnd:   return Key::End;
+        case kbCtrlPgUp:  return Key::PageUp;
+        case kbCtrlPgDn:  return Key::PageDown;
         default:         return Key::None;
     }
+}
+
+// true for the Ctrl+arrow keycodes above (their ctrl bit isn't always in controlKeyState)
+inline bool isCtrlNav(ushort kc) {
+    return kc == kbCtrlLeft || kc == kbCtrlRight || kc == kbCtrlHome ||
+           kc == kbCtrlEnd  || kc == kbCtrlPgUp  || kc == kbCtrlPgDn;
+}
+
+std::string base64(std::string_view in) {
+    static const char* t = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out; int val = 0, bits = -6;
+    for (unsigned char c : in) { val = (val << 8) + c; bits += 8;
+        while (bits >= 0) { out.push_back(t[(val >> bits) & 0x3F]); bits -= 6; } }
+    if (bits > -6) out.push_back(t[((val << 8) >> (bits + 8)) & 0x3F]);
+    while (out.size() % 4) out.push_back('=');
+    return out;
 }
 
 class TvisionBackend : public Backend {
@@ -161,8 +184,16 @@ public:
             k.mods.shift = (ev.keyDown.controlKeyState & kbShift) != 0;
             k.mods.ctrl  = (ev.keyDown.controlKeyState & kbCtrlShift) != 0;
             k.mods.alt   = (ev.keyDown.controlKeyState & kbAltShift) != 0;
+            if (isCtrlNav(ev.keyDown.keyCode)) k.mods.ctrl = true;
             Key mapped = mapKey(ev.keyDown.keyCode);
             if (mapped != Key::None) { k.key = mapped; return true; }
+            // Ctrl+letter (copy/cut/paste/select-all, §5.11.3): arrives as a control
+            // char 0x01..0x1A — deliver as Char + ctrl so widgets can bind it.
+            unsigned char cc = (unsigned char)ev.keyDown.charScan.charCode;
+            if (k.mods.ctrl && cc >= 1 && cc <= 26) {
+                k.key = Key::Char; k.ch = U'a' + (cc - 1); k.text = std::string(1, (char)k.ch);
+                return true;
+            }
             // printable: take the text payload
             if (ev.keyDown.textLength > 0) {
                 k.key = Key::Char;
@@ -196,6 +227,12 @@ public:
 
     void setCursor(int x, int y, bool visible) override {
         if (visible) { THardwareInfo::setCaretPosition((ushort)x, (ushort)y); }
+    }
+
+    // OSC 52: best-effort write to the system clipboard (§5.11.4). Advisory only.
+    void setClipboard(std::string_view text) override {
+        std::string seq = "\x1b]52;c;" + base64(text) + "\x07";
+        ssize_t r = ::write(STDOUT_FILENO, seq.data(), seq.size()); (void)r;
     }
 
     void shutdown() override { THardwareInfo::restoreConsole(); }

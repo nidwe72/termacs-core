@@ -31,13 +31,14 @@ struct MouseEvent {
 
 struct ResizeEvent { int w = 0, h = 0; };
 
-enum class InputKind { None, Key, Mouse, Resize };
+enum class InputKind { None, Key, Mouse, Resize, Paste };
 
 struct InputEvent {
     InputKind   kind = InputKind::None;
     KeyEvent    key;
     MouseEvent  mouse;
     ResizeEvent resize;
+    std::string paste;            // pasted text when kind == Paste (bracketed paste, §11.5)
 };
 
 } // namespace termacs
