@@ -120,7 +120,7 @@ int main() {
 
 ### 5.2 Widgets & the tree
 
-- Base type `Widget`; concrete: `Window`, `Label`, `Button`, `LineEdit`, `CheckBox`, `RadioGroup`, `ListView`, `Table`, `Menu`, `MenuBar`, `StatusBar`, `ProgressBar`, `Spacer`, `Frame`, …
+- Base type `Widget`; concrete: `Window`, `Label`, `Button`, `LineEdit`, `TextArea`, `CheckBox`, `OptionGroup` (radio / multi-select), `ComboBox`, `ListView`, `Table`, `Menu`, `MenuBar`, `StatusBar`, `ProgressBar`, `Spacer`, `Frame`, … (selection & input widgets are specified in §5.10).
 - Created **only** via parent factories: `addLabel`, `addButton`, `addLineEdit`, … Each returns a typed handle.
 - Tree ops: `widget.remove()`, `widget.parent()`, `widget.children()`, `widget.setVisible(bool)`, `widget.setEnabled(bool)`.
 
@@ -306,6 +306,75 @@ myModel.reset();                    // structure changed; re-query visible windo
 
 Scope: the milestone needs only `ListView` with eager `addItem`/`removeItem`. The pull-based `Model`, `Table` (N columns), and virtualization land in **P5** (post-milestone); tree/hierarchical models later still.
 
+### 5.10 Selection & input widgets *(P5)*
+
+A second wave of widgets built on **one shared idea — options + a selection** — rendered three ways (collapsed dropdown, expanded group, list). One vocabulary (`setOptions({...})` + a selection surface) spans all of them, and the selection signal always carries the **changed index** (variant-safe over the C ABI, §7), so single- and multi-select share one signature. Eager `setOptions` is the default (small sets); a huge set can take a pull `Model` (§5.9) later.
+
+#### `ComboBox` — collapsed single-select dropdown
+```cpp
+ComboBox cb = row.addComboBox();
+cb.setOptions({ "Low", "Medium", "High" });
+cb.setSelectedIndex(1);                 // or setSelected("Medium")
+int i = cb.selectedIndex();             // -1 ⇒ none
+cb.setPlaceholder("Choose…");           // shown when index == -1
+cb.selectionChanged().connect([](int i){ … });
+```
+The dropdown renders on the floating layer (§5.7). Keys: Enter/Space opens; ↑/↓ navigate; Esc closes; ↑/↓ while closed cycles the selection.
+
+#### `CheckBox` — atomic boolean toggle
+```cpp
+CheckBox c = col.addCheckBox("Remember me");
+c.setChecked(true);  bool on = c.isChecked();
+c.toggled().connect([](bool on){ … });
+```
+
+#### `OptionGroup` — single **and** multiple radio selection
+One widget, two modes — single vs. multiple differ only in cardinality and glyph (`◉/○` vs. `☑/☐`), so they are **not** separate types:
+```cpp
+enum class SelectMode { One, Many };
+
+OptionGroup g = col.addOptionGroup(SelectMode::One);     // single
+g.setOptions({ "Small", "Medium", "Large" });
+g.setOrientation(Axis::Vertical);        // or Horizontal
+g.setSelectedIndex(0);
+g.selectionChanged().connect([](int i){ … });            // i = now-selected
+
+OptionGroup m = col.addOptionGroup(SelectMode::Many);    // multiple
+m.setOptions({ "Bold", "Italic", "Underline" });
+m.setSelected(0, true);
+bool b = m.isSelected(1);
+std::vector<int> ix = m.selectedIndices();
+m.selectionChanged().connect([](int i){ … });            // i = toggled item; query isSelected(i)
+```
+Sugar aliases: `addRadioGroup()` ≡ `addOptionGroup(One)`, `addCheckGroup()` ≡ `addOptionGroup(Many)`. Keys: ↑/↓ move the cursor; Space selects (One) / toggles (Many).
+
+#### `Button` variants — generic, not dialog-bound
+`Button` (already in v1) gains general-purpose emphasis + keyboard semantics, usable in **any** layout — not a dialog construct:
+```cpp
+enum class ButtonVariant { Normal, Primary, Danger, Quiet };
+Button b = row.addButton("Save");
+b.setVariant(ButtonVariant::Primary);    // theme-role emphasis
+b.setDefault(true);                       // Enter activates it within its focus scope
+b.setEnabled(false);                      // (existing) disabled state
+```
+Variants map to theme roles; `setDefault` is a property of any button. (A conventional OK/Cancel *button-box* may layer on top later as sugar, but buttons are general-purpose first.)
+
+#### `TextArea` — multi-line editor
+```cpp
+TextArea ta = col.addTextArea();
+ta.setText("multi\nline");  auto s = ta.text();
+ta.setPlaceholder("Notes…");
+ta.setReadOnly(false);
+ta.setWordWrap(true);                     // wrap vs. horizontal scroll
+ta.appendLine("…");
+ta.textChanged().connect([](const std::string& t){ … });
+```
+Scrolls within its viewport — **depends on `ScrollView` (same P5 wave)**. Tab moves focus (preserves traversal); literal indent is opt-in, not default.
+
+**New theme roles:** `combo.{bg,border,arrow}`, `dropdown.{bg,selected}`, `option.{mark,selected}`, `checkbox.mark`, `button.{primary,danger,quiet}.*`, `textarea.{bg,text,cursor,placeholder}`.
+
+**Bindings** project the signal accessors as `onX` callbacks (`cb.onSelectionChanged(i -> …)`, `c.onToggled(on -> …)`, etc.), consistent with the existing widget set (§8).
+
 ---
 
 ## 6. The Backend seam
@@ -476,7 +545,7 @@ The four prior open questions are now decided (details in the linked sections):
 
 | Phase | Goal | Scope |
 |---|---|---|
-| **P5** | Breadth | full `Grid`; `Table` + pull-based model/view (virtualized); `ScrollView`; more widgets (`CheckBox`, `RadioGroup`, `ProgressBar`, `Frame`, `Spacer`); theming from file; custom-widget paint surface |
+| **P5** | Breadth | full `Grid`; `Table` + pull-based model/view (virtualized); `ScrollView`; **selection & input widgets** — `ComboBox`, `CheckBox`, `OptionGroup` (radio/multi), `TextArea`, `Button` variants (§5.10) — plus `ProgressBar`, `Frame`, `Spacer`; theming from file; custom-widget paint surface |
 | **P6** | Python & Dart | cffi + dart:ffi over the shared `libtermacs.so` — mechanical, since the ABI is already proven by Java |
 | **P7** | Android | native Android-Canvas `Backend` (beyond Termux) |
 
