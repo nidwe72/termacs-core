@@ -22,6 +22,7 @@ add_library(termacs STATIC
     src/core.cpp
     src/widget.cpp
     src/application.cpp
+    src/text_buffer.cpp
     backends/tvision/tvision_backend.cpp
     cabi/cabi.cpp
 )
@@ -54,10 +55,14 @@ add_executable(tc_librope tests/cpp/librope_smoke.cpp)
 target_link_libraries(tc_librope termacs)
 add_test(NAME librope COMMAND tc_librope)
 
+add_executable(tc_textbuffer tests/cpp/textbuffer_test.cpp)
+target_link_libraries(tc_textbuffer termacs)
+add_test(NAME textbuffer COMMAND tc_textbuffer)
+
 # Shared C-ABI library (libtermacs.so) — what the language bindings link against
 add_library(termacs_c SHARED cabi/cabi.cpp
     src/cell.cpp src/theme.cpp src/core.cpp src/widget.cpp src/application.cpp
-    backends/tvision/tvision_backend.cpp)
+    src/text_buffer.cpp backends/tvision/tvision_backend.cpp)
 target_include_directories(termacs_c PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(termacs_c PRIVATE tvision librope)
 set_target_properties(termacs_c PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON OUTPUT_NAME termacs)
