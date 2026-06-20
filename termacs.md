@@ -375,12 +375,12 @@ Scrolls within its viewport — **depends on `ScrollView` (same P5 wave)**. Draw
 
 **Bindings** project the signal accessors as `onX` callbacks (`cb.onSelectionChanged(i -> …)`, `c.onToggled(on -> …)`, etc.), consistent with the existing widget set (§8).
 
-### 5.11 Text editing model *(shared by `LineEdit` and `TextArea`)*
+### 5.11 Text editing model *(shared by `LineEdit` and `TextArea` — ✅ implemented in `v0.3.0`, C ABI v3)*
 
 Both editable widgets share **one model**, so navigation, selection, and clipboard behave identically across them; `LineEdit` is the single-line specialization. The model is **decoupled from rendering** — a pure `TextBuffer` (text + cursor + selection + edit/clipboard ops); the widgets only *draw* it.
 
-#### 5.11.1 Backing store — Boost.Text, hidden behind the ABI
-The buffer is backed by **[Boost.Text](https://github.com/tzlaine/text)** (a UTF-8-aware rope), added as a pinned **core-internal** dependency. The size is deliberate: it buys O(log n) edits *and* Unicode correctness — **grapheme-cluster cursor movement** and **word-break iteration** — which we'd otherwise hand-roll badly. Crucially, the dependency is **invisible across the C ABI**: every editing operation is projected as flat `tm_*` calls, so the **editing API is language-independent** — Java/Python/Dart bindings get the identical surface with no knowledge of (or link against) Boost.Text. Only `termacs-core` links it. (`TextBuffer` remains an abstraction seam; the backing could change without touching the ABI.)
+#### 5.11.1 Backing store — librope, hidden behind the ABI
+The buffer is backed by **[librope](https://github.com/josephg/librope)** (MIT, a 2-file UTF-8 skip-list rope) vendored under `third_party/librope`. Chosen at the T0 implementation gate over Boost.Text: it is **offset-based** (`rope_insert(pos)`/`rope_del(pos)` — a clean match for our codepoint-offset cursor model, avoiding Boost.Text's grapheme-iterator impedance), **zero system dependencies** (no `libboost-dev`), and decoupled from rendering. `TextBuffer` keeps a lazily-rebuilt codepoint cache over the rope for navigation reads. Word-break is a codepoint heuristic (alnum runs); grapheme-cluster precision is deferred — `TextBuffer` is an abstraction **seam**, so a Unicode-perfect backing (Boost.Text) could be swapped in later without touching the ABI. Crucially the backing is **invisible across the C ABI**: editing is projected as flat `tm_*` calls, so the editing API is language-independent — Java/Python/Dart bindings get the identical surface and only `termacs-core` links the rope.
 
 #### 5.11.2 Selection model
 A `cursor` plus an optional `anchor`; the selection is the span `[anchor, cursor)`. Inserting text or pasting **replaces** a non-empty selection. Cursor and word/line boundaries are **grapheme-aware** (a combining sequence or wide glyph moves as one unit, via Boost.Text). `textChanged` fires on any edit; a new `selectionChanged` fires when the span changes.
@@ -415,7 +415,7 @@ std::string         selectedText() const;
 void                copy();  void cut();  void paste();   // register + OSC 52
 Signal<>&           selectionChanged();
 ```
-Java: `selectAll()`, `copy()/cut()/paste()`, `onSelectionChanged(...)`. (Status: design only — implementation pending an explicit request; it extends the §5.10 widgets, C ABI v3.)
+Java: `selectAll()`, `copy()/cut()/paste()`, `onSelectionChanged(...)`. **Status: ✅ implemented in `v0.3.0` (C ABI v3)** — backed by vendored **librope** (not Boost.Text; chosen at the T0 gate for an offset-based, zero-system-dep fit, §5.11.1's seam preserved). Unicode word-break is a codepoint heuristic for now.
 
 ---
 
@@ -865,6 +865,7 @@ The path-to-milestone phases are implemented and green. Build everything with `.
 | **P3** | Java binding: JNI shim → single `libtermacsjni.so`, `sciens.termacs.*` OOP classes, callback trampolines (events cross back into Java lambdas), `tm_abi_version` checked on load | `HeadlessTest` — full TaskDemo via JNI→C ABI→core, all assertions pass |
 | **P4 ★** | `termacs-java-demo` `TaskDemo` (§13) | Runs on a real (pseudo) terminal: paints the full UI, accepts typed input (the task appears in the list), F10▸File▸Quit→confirm→Yes exits cleanly. Driven headlessly by `tools/run_demo_pty.py` (rc=0). |
 | **P5 widgets** | §5.10 selection & input widgets across every layer (core → **C ABI v2** → JNI → Java): `ComboBox`, `CheckBox`, `OptionGroup` (radio + multi), `ProgressBar`, `TextArea`, `Frame`, `ScrollView`, `Button` variants + default-button Enter routing; new Dark/Light theme roles; `termacs-core` tagged **`v0.2.0`** | `tc_widgets` (ctest) snapshot asserts every control renders + holds state; `WidgetGallery` demo verified on a real pty (`tools/run_gallery_pty.py`, 9/9 controls, rc=0); a clean GitHub clone builds the binding against the `v0.2.0` tag |
+| **Text editing** | §5.11 modern editing on `LineEdit` + `TextArea` (core → **C ABI v3** → JNI → Java): librope-backed `TextBuffer`; char/word/line/doc nav, Shift-select, Ctrl+A/C/X/V, delete-word, multi-line + scrollbar, selection highlight, bracketed-paste events, OSC 52 write-through; `termacs-core` tagged **`v0.3.0`** | `tc_librope` + `tc_textbuffer` + `tc_edit` (ctest, 7/7) cover the rope, model, and widget shortcuts/selection/clipboard; HeadlessTest + `WidgetGallery` green |
 
 **Verified everywhere it matters via `HeadlessBackend`** (which renders the *exact* cell buffer the terminal backend presents): the framework, all widgets, layout, signals, menus, dialogs, and the Java binding's callbacks all pass automated tests in C++, C, and Java. The **real tvision terminal backend** is additionally verified end-to-end: `tools/run_demo_pty.py` launches the Java demo on a pseudo-terminal, types a task, drives the menu/dialog, and confirms the rendered frames contain the expected UI.
 
