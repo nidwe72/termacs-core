@@ -10,6 +10,11 @@ set(TV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(TV_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/tvision)
 
+# --- vendored librope (MIT; UTF-8 rope backing the text-editing model §5.11) ---
+add_library(librope STATIC third_party/librope/rope.c)
+target_include_directories(librope PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/librope)
+set_property(TARGET librope PROPERTY POSITION_INDEPENDENT_CODE ON)
+
 # --- the termacs core library (framework + C ABI later) ---
 add_library(termacs STATIC
     src/cell.cpp
@@ -24,7 +29,7 @@ target_include_directories(termacs
     PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
-target_link_libraries(termacs PUBLIC tvision)
+target_link_libraries(termacs PUBLIC tvision librope)
 set_target_properties(termacs PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
 
 # --- tests ---
@@ -45,12 +50,16 @@ add_executable(tc_widgets tests/cpp/widgets_test.cpp)
 target_link_libraries(tc_widgets termacs)
 add_test(NAME widgets COMMAND tc_widgets)
 
+add_executable(tc_librope tests/cpp/librope_smoke.cpp)
+target_link_libraries(tc_librope termacs)
+add_test(NAME librope COMMAND tc_librope)
+
 # Shared C-ABI library (libtermacs.so) — what the language bindings link against
 add_library(termacs_c SHARED cabi/cabi.cpp
     src/cell.cpp src/theme.cpp src/core.cpp src/widget.cpp src/application.cpp
     backends/tvision/tvision_backend.cpp)
 target_include_directories(termacs_c PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(termacs_c PRIVATE tvision)
+target_link_libraries(termacs_c PRIVATE tvision librope)
 set_target_properties(termacs_c PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON OUTPUT_NAME termacs)
 target_link_options(termacs_c PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cabi/termacs.map")
 
