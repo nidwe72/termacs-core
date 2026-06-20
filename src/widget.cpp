@@ -1,5 +1,6 @@
 #include "termacs/widget.hpp"
 #include "internal.hpp"
+#include <algorithm>
 
 namespace termacs {
 
@@ -63,13 +64,142 @@ VBox Container::addVBox() {
     return VBox(core_, id);
 }
 
+// ----- P5 widget factories (§5.10) --------------------------------------------
+CheckBox Container::addCheckBox(const std::string& text) {
+    auto [id, p] = core_->create<CheckBoxNode>();
+    p->text = text;
+    core_->addChild(id_, id);
+    return CheckBox(core_, id);
+}
+OptionGroup Container::addOptionGroup(SelectMode mode) {
+    auto [id, p] = core_->create<OptionGroupNode>();
+    p->mode = (mode == SelectMode::Many) ? 1 : 0;
+    core_->addChild(id_, id);
+    return OptionGroup(core_, id);
+}
+OptionGroup Container::addRadioGroup() { return addOptionGroup(SelectMode::One); }
+OptionGroup Container::addCheckGroup() { return addOptionGroup(SelectMode::Many); }
+ComboBox Container::addComboBox() {
+    auto [id, p] = core_->create<ComboBoxNode>(); (void)p;
+    core_->addChild(id_, id);
+    return ComboBox(core_, id);
+}
+ProgressBar Container::addProgressBar() {
+    auto [id, p] = core_->create<ProgressBarNode>(); (void)p;
+    core_->addChild(id_, id);
+    return ProgressBar(core_, id);
+}
+TextArea Container::addTextArea() {
+    auto [id, p] = core_->create<TextAreaNode>(); (void)p;
+    core_->addChild(id_, id);
+    return TextArea(core_, id);
+}
+Frame Container::addFrame(const std::string& title) {
+    auto [id, p] = core_->create<FrameNode>();
+    p->title = title;
+    core_->addChild(id_, id);
+    return Frame(core_, id);
+}
+ScrollView Container::addScrollView() {
+    auto [id, p] = core_->create<ScrollViewNode>(); (void)p;
+    core_->addChild(id_, id);
+    return ScrollView(core_, id);
+}
+
 // ----- Label ------------------------------------------------------------------
 void        Label::setText(const std::string& t) { reqAs<LabelNode>(core_, id_).text = t; }
 std::string Label::text() const { return reqAs<LabelNode>(core_, id_).text; }
 
 // ----- Button -----------------------------------------------------------------
 void      Button::setText(const std::string& t) { reqAs<ButtonNode>(core_, id_).text = t; }
+void      Button::setVariant(ButtonVariant v)   { reqAs<ButtonNode>(core_, id_).variant = (int)v; }
+void      Button::setDefault(bool d)            { reqAs<ButtonNode>(core_, id_).isDefault = d; }
 Signal<>& Button::clicked() { return reqAs<ButtonNode>(core_, id_).clicked; }
+
+// ----- CheckBox ---------------------------------------------------------------
+void CheckBox::setText(const std::string& t) { reqAs<CheckBoxNode>(core_, id_).text = t; }
+void CheckBox::setChecked(bool c)            { reqAs<CheckBoxNode>(core_, id_).checked = c; }
+bool CheckBox::isChecked() const             { return reqAs<CheckBoxNode>(core_, id_).checked; }
+Signal<bool>& CheckBox::toggled()            { return reqAs<CheckBoxNode>(core_, id_).toggled; }
+
+// ----- OptionGroup ------------------------------------------------------------
+void OptionGroup::setOptions(const std::vector<std::string>& opts) {
+    auto& n = reqAs<OptionGroupNode>(core_, id_);
+    n.options = opts; n.on.assign(opts.size(), 0); n.cursor = 0;
+}
+void OptionGroup::setOrientation(Axis a) { reqAs<OptionGroupNode>(core_, id_).orient = a; }
+void OptionGroup::setSelectedIndex(int i) {
+    auto& n = reqAs<OptionGroupNode>(core_, id_);
+    std::fill(n.on.begin(), n.on.end(), 0);
+    if (i >= 0 && i < (int)n.on.size()) { n.on[i] = 1; n.cursor = i; }
+}
+int OptionGroup::selectedIndex() const {
+    auto& n = reqAs<OptionGroupNode>(core_, id_);
+    for (int i = 0; i < (int)n.on.size(); ++i) if (n.on[i]) return i;
+    return -1;
+}
+void OptionGroup::setSelected(int i, bool on) {
+    auto& n = reqAs<OptionGroupNode>(core_, id_);
+    if (i < 0 || i >= (int)n.on.size()) return;
+    if (n.mode == 0) std::fill(n.on.begin(), n.on.end(), 0);
+    n.on[i] = on ? 1 : 0;
+}
+bool OptionGroup::isSelected(int i) const {
+    auto& n = reqAs<OptionGroupNode>(core_, id_);
+    return (i >= 0 && i < (int)n.on.size()) && n.on[i];
+}
+std::vector<int> OptionGroup::selectedIndices() const {
+    auto& n = reqAs<OptionGroupNode>(core_, id_);
+    std::vector<int> r;
+    for (int i = 0; i < (int)n.on.size(); ++i) if (n.on[i]) r.push_back(i);
+    return r;
+}
+Signal<int>& OptionGroup::selectionChanged() { return reqAs<OptionGroupNode>(core_, id_).selectionChanged; }
+
+// ----- ComboBox ---------------------------------------------------------------
+void ComboBox::setOptions(const std::vector<std::string>& opts) {
+    auto& n = reqAs<ComboBoxNode>(core_, id_); n.options = opts; n.sel = -1; n.cursor = 0;
+}
+void ComboBox::setSelectedIndex(int i) {
+    auto& n = reqAs<ComboBoxNode>(core_, id_);
+    if (i >= -1 && i < (int)n.options.size()) { n.sel = i; if (i >= 0) n.cursor = i; }
+}
+int ComboBox::selectedIndex() const { return reqAs<ComboBoxNode>(core_, id_).sel; }
+std::string ComboBox::selectedText() const {
+    auto& n = reqAs<ComboBoxNode>(core_, id_);
+    return (n.sel >= 0 && n.sel < (int)n.options.size()) ? n.options[n.sel] : std::string();
+}
+void ComboBox::setPlaceholder(const std::string& p) { reqAs<ComboBoxNode>(core_, id_).placeholder = p; }
+Signal<int>& ComboBox::selectionChanged() { return reqAs<ComboBoxNode>(core_, id_).selectionChanged; }
+
+// ----- ProgressBar ------------------------------------------------------------
+void ProgressBar::setValue(int v) { reqAs<ProgressBarNode>(core_, id_).value = std::max(0, std::min(100, v)); }
+int  ProgressBar::value() const   { return reqAs<ProgressBarNode>(core_, id_).value; }
+
+// ----- TextArea ---------------------------------------------------------------
+void TextArea::setText(const std::string& t) {
+    auto& n = reqAs<TextAreaNode>(core_, id_);
+    n.lines.clear(); std::string cur;
+    for (char c : t) { if (c == '\n') { n.lines.push_back(cur); cur.clear(); } else cur += c; }
+    n.lines.push_back(cur);
+    if (n.lines.empty()) n.lines.push_back("");
+    n.cy = 0; n.cx = 0; n.top = 0;
+}
+std::string TextArea::text() const { return reqAs<TextAreaNode>(core_, id_).joined(); }
+void TextArea::appendLine(const std::string& t) {
+    auto& n = reqAs<TextAreaNode>(core_, id_);
+    if (n.lines.size() == 1 && n.lines[0].empty()) n.lines[0] = t; else n.lines.push_back(t);
+}
+void TextArea::setReadOnly(bool r) { reqAs<TextAreaNode>(core_, id_).readOnly = r; }
+void TextArea::setWordWrap(bool w) { reqAs<TextAreaNode>(core_, id_).wrap = w; }
+void TextArea::setPlaceholder(const std::string& p) { reqAs<TextAreaNode>(core_, id_).placeholder = p; }
+Signal<const std::string&>& TextArea::textChanged() { return reqAs<TextAreaNode>(core_, id_).textChanged; }
+
+// ----- Frame / ScrollView -----------------------------------------------------
+void Frame::setTitle(const std::string& t) { reqAs<FrameNode>(core_, id_).title = t; }
+void ScrollView::scrollTo(int x, int y) {
+    auto& n = reqAs<ScrollViewNode>(core_, id_); n.offX = std::max(0, x); n.offY = std::max(0, y);
+}
 
 // ----- LineEdit ---------------------------------------------------------------
 void LineEdit::setText(const std::string& t) {

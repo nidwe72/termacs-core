@@ -16,6 +16,14 @@ enum class Role {
     ListItem, ListSel,
     StatusBar,
     DialogBg, DialogFrame, DialogTitle,
+    // P5 widgets (§5.10)
+    ButtonPrimary, ButtonDanger, ButtonQuiet,
+    Option, OptionFocused,
+    Combo, ComboFocused,
+    DropdownBg, DropdownSel,
+    ProgressTrack, ProgressFill,
+    FrameBorder, FrameTitle,
+    ScrollTrack, ScrollThumb,
     _Count
 };
 

@@ -18,7 +18,8 @@ namespace termacs {
 
 class Core;
 
-enum class NodeKind { Window, VBox, HBox, Label, Button, LineEdit, ListView, MenuBar, Menu, StatusBar, Dialog };
+enum class NodeKind { Window, VBox, HBox, Label, Button, LineEdit, ListView, MenuBar, Menu, StatusBar, Dialog,
+                      CheckBox, OptionGroup, ComboBox, ProgressBar, TextArea, Frame, ScrollView };
 
 // ---------------------------------------------------------------------------
 class Node {
@@ -49,14 +50,35 @@ int prefAlong(Node& n, Core& core, Backend& be, Axis ax);
 // ---------------------------------------------------------------------------
 class ContainerNode : public Node {
 public:
-    explicit ContainerNode(NodeKind k) : Node(k) {}   // VBox or HBox
+    explicit ContainerNode(NodeKind k)
+        : Node(k), main_(k == NodeKind::VBox ? Axis::Vertical : Axis::Horizontal) {}
     int  padding = 0;
     int  spacing = 0;
-    Axis mainAxis() const { return kind == NodeKind::VBox ? Axis::Vertical : Axis::Horizontal; }
+    Axis main_;
+    Axis mainAxis() const { return main_; }
 
     Size contentSize(Core&, Backend&) override;
     void arrange(Core&, Backend&) override;
     void draw(Core&, Canvas&, const Theme&) override;
+};
+
+// Bordered, titled container (decoration). Children inset by the 1-cell border.
+class FrameNode : public ContainerNode {
+public:
+    FrameNode() : ContainerNode(NodeKind::Frame) { main_ = Axis::Vertical; padding = 1; }
+    std::string title;
+    void draw(Core&, Canvas&, const Theme&) override;
+};
+
+// Clipping viewport that scrolls a single (taller/wider) content child.
+class ScrollViewNode : public ContainerNode {
+public:
+    ScrollViewNode() : ContainerNode(NodeKind::ScrollView) { main_ = Axis::Vertical; focusable = true; }
+    int offX = 0, offY = 0;        // scroll offset (cells)
+    int contentW = 0, contentH = 0;
+    void arrange(Core&, Backend&) override;
+    void draw(Core&, Canvas&, const Theme&) override;
+    bool handleKey(Core&, const KeyEvent&) override;
 };
 
 class LabelNode : public Node {
@@ -71,6 +93,8 @@ class ButtonNode : public Node {
 public:
     ButtonNode() : Node(NodeKind::Button) { focusable = true; }
     std::string text;
+    int         variant = 0;       // 0 Normal, 1 Primary, 2 Danger, 3 Quiet
+    bool        isDefault = false; // fires on unhandled Enter in its window
     Signal<>    clicked;
     Size contentSize(Core&, Backend&) override;
     void draw(Core&, Canvas&, const Theme&) override;
@@ -102,6 +126,75 @@ public:
     void draw(Core&, Canvas&, const Theme&) override;
     bool handleKey(Core&, const KeyEvent&) override;
     void onRemoved() override { activated.clear(); }
+};
+
+// ----- P5 selection & input widget nodes (§5.10) ------------------------------
+class CheckBoxNode : public Node {
+public:
+    CheckBoxNode() : Node(NodeKind::CheckBox) { focusable = true; }
+    std::string  text;
+    bool         checked = false;
+    Signal<bool> toggled;
+    Size contentSize(Core&, Backend&) override;
+    void draw(Core&, Canvas&, const Theme&) override;
+    bool handleKey(Core&, const KeyEvent&) override;
+    void onRemoved() override { toggled.clear(); }
+};
+
+class OptionGroupNode : public Node {
+public:
+    OptionGroupNode() : Node(NodeKind::OptionGroup) { focusable = true; }
+    std::vector<std::string> options;
+    std::vector<char>        on;        // parallel selected flags
+    int   mode = 0;                     // 0 One (radio), 1 Many (check)
+    int   cursor = 0;
+    Axis  orient = Axis::Vertical;
+    Signal<int> selectionChanged;       // i = changed option
+    Size contentSize(Core&, Backend&) override;
+    void draw(Core&, Canvas&, const Theme&) override;
+    bool handleKey(Core&, const KeyEvent&) override;
+    void onRemoved() override { selectionChanged.clear(); }
+};
+
+class ComboBoxNode : public Node {
+public:
+    ComboBoxNode() : Node(NodeKind::ComboBox) { focusable = true; }
+    std::vector<std::string> options;
+    int         sel = -1;
+    int         cursor = 0;             // highlighted item while open
+    bool        open = false;
+    std::string placeholder;
+    Rect        popup{};                // dropdown rect (for hit-testing)
+    Signal<int> selectionChanged;
+    Size contentSize(Core&, Backend&) override;
+    void draw(Core&, Canvas&, const Theme&) override;
+    bool handleKey(Core&, const KeyEvent&) override;
+    void onRemoved() override { selectionChanged.clear(); }
+};
+
+class ProgressBarNode : public Node {
+public:
+    ProgressBarNode() : Node(NodeKind::ProgressBar) {}
+    int value = 0;                      // 0..100
+    Size contentSize(Core&, Backend&) override;
+    void draw(Core&, Canvas&, const Theme&) override;
+};
+
+class TextAreaNode : public Node {
+public:
+    TextAreaNode() : Node(NodeKind::TextArea) { focusable = true; }
+    std::vector<std::string>   lines{ "" };
+    int  cx = 0, cy = 0;                // cursor col / row
+    int  top = 0;                       // first visible row (vertical scroll)
+    bool readOnly = false;
+    bool wrap = false;
+    std::string placeholder;
+    Signal<const std::string&> textChanged;
+    std::string joined() const { std::string s; for (size_t i=0;i<lines.size();++i){ if(i) s+='\n'; s+=lines[i]; } return s; }
+    Size contentSize(Core&, Backend&) override;
+    void draw(Core&, Canvas&, const Theme&) override;
+    bool handleKey(Core&, const KeyEvent&) override;
+    void onRemoved() override { textChanged.clear(); }
 };
 
 struct MenuItem { std::string label; std::function<void()> onActivate; };

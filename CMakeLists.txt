@@ -41,6 +41,10 @@ target_link_libraries(tc_csmoke termacs)
 set_target_properties(tc_csmoke PROPERTIES LINKER_LANGUAGE CXX)
 add_test(NAME csmoke COMMAND tc_csmoke)
 
+add_executable(tc_widgets tests/cpp/widgets_test.cpp)
+target_link_libraries(tc_widgets termacs)
+add_test(NAME widgets COMMAND tc_widgets)
+
 # Shared C-ABI library (libtermacs.so) — what the language bindings link against
 add_library(termacs_c SHARED cabi/cabi.cpp
     src/cell.cpp src/theme.cpp src/core.cpp src/widget.cpp src/application.cpp

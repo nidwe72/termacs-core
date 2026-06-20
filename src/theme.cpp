@@ -27,6 +27,21 @@ Theme Theme::builtin(Builtin b) {
         t.set(Role::DialogBg,      S(black, white));
         t.set(Role::DialogFrame,   S(black, white));
         t.set(Role::DialogTitle,   S(blue, white, true));
+        t.set(Role::ButtonPrimary, S(brightWhite, green, true));
+        t.set(Role::ButtonDanger,  S(brightWhite, red, true));
+        t.set(Role::ButtonQuiet,   S(brightCyan, blue));
+        t.set(Role::Option,        S(brightWhite, blue));
+        t.set(Role::OptionFocused, S(brightWhite, green, true));
+        t.set(Role::Combo,         S(black, cyan));
+        t.set(Role::ComboFocused,  S(brightWhite, green, true));
+        t.set(Role::DropdownBg,    S(black, white));
+        t.set(Role::DropdownSel,   S(brightWhite, green, true));
+        t.set(Role::ProgressTrack, S(brightWhite, gray));
+        t.set(Role::ProgressFill,  S(black, green));
+        t.set(Role::FrameBorder,   S(brightWhite, blue));
+        t.set(Role::FrameTitle,    S(brightCyan, blue, true));
+        t.set(Role::ScrollTrack,   S(gray, blue));
+        t.set(Role::ScrollThumb,   S(brightWhite, blue));
     } else { // Light
         t.set(Role::WindowBg,      S(black, brightWhite));
         t.set(Role::WindowFrame,   S(gray, brightWhite));
@@ -47,6 +62,21 @@ Theme Theme::builtin(Builtin b) {
         t.set(Role::DialogBg,      S(black, white));
         t.set(Role::DialogFrame,   S(black, white));
         t.set(Role::DialogTitle,   S(blue, white, true));
+        t.set(Role::ButtonPrimary, S(brightWhite, green, true));
+        t.set(Role::ButtonDanger,  S(brightWhite, red, true));
+        t.set(Role::ButtonQuiet,   S(blue, brightWhite));
+        t.set(Role::Option,        S(black, brightWhite));
+        t.set(Role::OptionFocused, S(brightWhite, blue, true));
+        t.set(Role::Combo,         S(brightWhite, blue));
+        t.set(Role::ComboFocused,  S(brightWhite, blue, true));
+        t.set(Role::DropdownBg,    S(black, white));
+        t.set(Role::DropdownSel,   S(brightWhite, blue, true));
+        t.set(Role::ProgressTrack, S(black, white));
+        t.set(Role::ProgressFill,  S(brightWhite, green));
+        t.set(Role::FrameBorder,   S(gray, brightWhite));
+        t.set(Role::FrameTitle,    S(blue, brightWhite, true));
+        t.set(Role::ScrollTrack,   S(gray, brightWhite));
+        t.set(Role::ScrollThumb,   S(blue, brightWhite));
     }
     return t;
 }

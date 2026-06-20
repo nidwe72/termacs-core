@@ -39,6 +39,15 @@ class LineEdit;
 class ListView;
 class HBox;
 class VBox;
+class CheckBox;
+class OptionGroup;
+class ComboBox;
+class ProgressBar;
+class Frame;
+class ScrollView;
+class TextArea;
+
+enum class SelectMode { One, Many };   // OptionGroup: single (radio) vs multi (check)
 
 // ----- container (VBox/HBox) factories ---------------------------------------
 class Container : public Widget {
@@ -47,16 +56,32 @@ public:
     void setPadding(int cells);
     void setSpacing(int cells);
 
-    Label    addLabel(const std::string& text);
-    Button   addButton(const std::string& text);
-    LineEdit addLineEdit();
-    ListView addListView();
-    HBox     addHBox();
-    VBox     addVBox();
+    Label       addLabel(const std::string& text);
+    Button      addButton(const std::string& text);
+    LineEdit    addLineEdit();
+    ListView    addListView();
+    HBox        addHBox();
+    VBox        addVBox();
+    // P5 selection & input widgets (§5.10)
+    CheckBox    addCheckBox(const std::string& text);
+    OptionGroup addOptionGroup(SelectMode mode);
+    OptionGroup addRadioGroup();   // = addOptionGroup(One)
+    OptionGroup addCheckGroup();   // = addOptionGroup(Many)
+    ComboBox    addComboBox();
+    ProgressBar addProgressBar();
+    TextArea    addTextArea();
+    Frame       addFrame(const std::string& title);
+    ScrollView  addScrollView();
 };
 
 class VBox : public Container { public: using Container::Container; };
 class HBox : public Container { public: using Container::Container; };
+
+// A bordered, titled container (decoration only).
+class Frame : public Container { public: using Container::Container; void setTitle(const std::string& t); };
+
+// A clipping viewport that scrolls content larger than itself.
+class ScrollView : public Container { public: using Container::Container; void scrollTo(int x, int y); };
 
 // ----- leaf widgets -----------------------------------------------------------
 class Label : public Widget {
@@ -66,10 +91,14 @@ public:
     std::string text() const;
 };
 
+enum class ButtonVariant { Normal, Primary, Danger, Quiet };
+
 class Button : public Widget {
 public:
     using Widget::Widget;
     void        setText(const std::string& t);
+    void        setVariant(ButtonVariant v);
+    void        setDefault(bool d);   // fires on unhandled Enter in its window
     Signal<>&   clicked();
 };
 
@@ -92,6 +121,59 @@ public:
     int         count() const;
     int         selected() const;
     Signal<int>& activated();   // Enter on a row
+};
+
+// ----- P5 selection & input widgets (§5.10) -----------------------------------
+class CheckBox : public Widget {
+public:
+    using Widget::Widget;
+    void          setText(const std::string& t);
+    void          setChecked(bool c);
+    bool          isChecked() const;
+    Signal<bool>& toggled();
+};
+
+class OptionGroup : public Widget {
+public:
+    using Widget::Widget;
+    void setOptions(const std::vector<std::string>& opts);
+    void setOrientation(Axis a);
+    void setSelectedIndex(int i);          // single (One) mode
+    int  selectedIndex() const;
+    void setSelected(int i, bool on);      // multi (Many) mode
+    bool isSelected(int i) const;
+    std::vector<int> selectedIndices() const;
+    Signal<int>& selectionChanged();       // i = the item that changed
+};
+
+class ComboBox : public Widget {
+public:
+    using Widget::Widget;
+    void        setOptions(const std::vector<std::string>& opts);
+    void        setSelectedIndex(int i);
+    int         selectedIndex() const;
+    std::string selectedText() const;
+    void        setPlaceholder(const std::string& p);
+    Signal<int>& selectionChanged();
+};
+
+class ProgressBar : public Widget {
+public:
+    using Widget::Widget;
+    void setValue(int percent);   // clamped 0..100
+    int  value() const;
+};
+
+class TextArea : public Widget {
+public:
+    using Widget::Widget;
+    void        setText(const std::string& t);
+    std::string text() const;
+    void        appendLine(const std::string& t);
+    void        setReadOnly(bool r);
+    void        setWordWrap(bool w);
+    void        setPlaceholder(const std::string& p);
+    Signal<const std::string&>& textChanged();
 };
 
 // ----- menus & status bar -----------------------------------------------------

@@ -18,7 +18,7 @@ extern "C" {
 #endif
 
 /* ----- ABI version & error channel ----- */
-#define TM_ABI_VERSION 1
+#define TM_ABI_VERSION 2   /* 2: P5 selection & input widgets (§5.10) */
 TM_EXPORT int         tm_abi_version(void);
 
 typedef enum { TM_OK = 0, TM_ERR_INVALID_HANDLE = 1, TM_ERR_BAD_ARG = 2, TM_ERR_INTERNAL = 3 } TmStatus;
@@ -46,7 +46,8 @@ typedef enum { TM_THEME_DARK = 0, TM_THEME_LIGHT = 1 } TmTheme;
 /* ----- the one variant event + slot ----- */
 typedef enum {
     TM_EV_CLICKED, TM_EV_TEXT_CHANGED, TM_EV_SUBMITTED,
-    TM_EV_ACTIVATED, TM_EV_MENU, TM_EV_DIALOG
+    TM_EV_ACTIVATED, TM_EV_MENU, TM_EV_DIALOG,
+    TM_EV_TOGGLED, TM_EV_SELECTION_CHANGED
 } TmEventKind;
 
 typedef struct {
@@ -122,6 +123,50 @@ TM_EXPORT void tm_on_clicked(tm_app*, tm_widget btn, TmSlot fn, void* user);
 TM_EXPORT void tm_on_submitted(tm_app*, tm_widget le, TmSlot fn, void* user);
 TM_EXPORT void tm_on_text_changed(tm_app*, tm_widget le, TmSlot fn, void* user);
 TM_EXPORT void tm_on_activated(tm_app*, tm_widget lv, TmSlot fn, void* user);
+
+/* ----- P5 selection & input widgets (§5.10) ----- */
+TM_EXPORT void   tm_button_set_variant(tm_app*, tm_widget, int variant);  /* 0..3 */
+TM_EXPORT void   tm_button_set_default(tm_app*, tm_widget, int isDefault);
+
+TM_EXPORT tm_widget tm_add_checkbox(tm_app*, tm_widget c, const char* text);
+TM_EXPORT void   tm_checkbox_set_checked(tm_app*, tm_widget, int checked);
+TM_EXPORT int    tm_checkbox_is_checked(tm_app*, tm_widget);
+TM_EXPORT void   tm_on_toggled(tm_app*, tm_widget, TmSlot fn, void* user);  /* ev.i: 1=checked */
+
+TM_EXPORT tm_widget tm_add_optiongroup(tm_app*, tm_widget c, int mode);     /* 0 One, 1 Many */
+TM_EXPORT void   tm_optiongroup_set_options(tm_app*, tm_widget, const char* nl_joined);
+TM_EXPORT void   tm_optiongroup_set_orientation(tm_app*, tm_widget, TmAxis);
+TM_EXPORT void   tm_optiongroup_set_selected_index(tm_app*, tm_widget, int i);
+TM_EXPORT int    tm_optiongroup_selected_index(tm_app*, tm_widget);
+TM_EXPORT void   tm_optiongroup_set_selected(tm_app*, tm_widget, int i, int on);
+TM_EXPORT int    tm_optiongroup_is_selected(tm_app*, tm_widget, int i);
+TM_EXPORT void   tm_on_option_changed(tm_app*, tm_widget, TmSlot fn, void* user);
+
+TM_EXPORT tm_widget tm_add_combobox(tm_app*, tm_widget c);
+TM_EXPORT void   tm_combobox_set_options(tm_app*, tm_widget, const char* nl_joined);
+TM_EXPORT void   tm_combobox_set_selected_index(tm_app*, tm_widget, int i);
+TM_EXPORT int    tm_combobox_selected_index(tm_app*, tm_widget);
+TM_EXPORT size_t tm_combobox_selected_text(tm_app*, tm_widget, char* buf, size_t cap);
+TM_EXPORT void   tm_combobox_set_placeholder(tm_app*, tm_widget, const char* text);
+TM_EXPORT void   tm_on_combo_changed(tm_app*, tm_widget, TmSlot fn, void* user);
+
+TM_EXPORT tm_widget tm_add_progressbar(tm_app*, tm_widget c);
+TM_EXPORT void   tm_progressbar_set_value(tm_app*, tm_widget, int percent);
+TM_EXPORT int    tm_progressbar_value(tm_app*, tm_widget);
+
+TM_EXPORT tm_widget tm_add_textarea(tm_app*, tm_widget c);
+TM_EXPORT void   tm_textarea_set_text(tm_app*, tm_widget, const char* text);
+TM_EXPORT size_t tm_textarea_text(tm_app*, tm_widget, char* buf, size_t cap);
+TM_EXPORT void   tm_textarea_append_line(tm_app*, tm_widget, const char* text);
+TM_EXPORT void   tm_textarea_set_readonly(tm_app*, tm_widget, int ro);
+TM_EXPORT void   tm_textarea_set_wordwrap(tm_app*, tm_widget, int wrap);
+TM_EXPORT void   tm_textarea_set_placeholder(tm_app*, tm_widget, const char* text);
+TM_EXPORT void   tm_on_textarea_changed(tm_app*, tm_widget, TmSlot fn, void* user);
+
+TM_EXPORT tm_widget tm_add_frame(tm_app*, tm_widget c, const char* title);
+TM_EXPORT void   tm_frame_set_title(tm_app*, tm_widget, const char* title);
+TM_EXPORT tm_widget tm_add_scrollview(tm_app*, tm_widget c);
+TM_EXPORT void   tm_scrollview_scroll_to(tm_app*, tm_widget, int x, int y);
 
 /* ----- dialogs (async, callback-result) ----- */
 TM_EXPORT void tm_dialog_info(tm_app*, tm_widget win, const char* message);

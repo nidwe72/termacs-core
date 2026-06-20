@@ -213,6 +213,74 @@ void tm_on_activated(tm_app* a, tm_widget lv, TmSlot fn, void* user) {
     TM_END
 }
 
+/* P5 selection & input widgets (§5.10) */
+static std::vector<std::string> splitNL(const char* s) {
+    std::vector<std::string> out; if (!s) return out;
+    std::string cur;
+    for (const char* p = s; *p; ++p) { if (*p == '\n') { out.push_back(cur); cur.clear(); } else cur += *p; }
+    out.push_back(cur);
+    return out;
+}
+
+void tm_button_set_variant(tm_app* a, tm_widget w, int v) { TM_BEGIN Button(CO(a), NI(w)).setVariant((ButtonVariant)v); TM_END }
+void tm_button_set_default(tm_app* a, tm_widget w, int d) { TM_BEGIN Button(CO(a), NI(w)).setDefault(d != 0); TM_END }
+
+tm_widget tm_add_checkbox(tm_app* a, tm_widget c, const char* t) { TM_BEGIN return PK(VBox(CO(a), NI(c)).addCheckBox(t ? t : "").id()); TM_END_V(0) return 0; }
+void tm_checkbox_set_checked(tm_app* a, tm_widget w, int v)      { TM_BEGIN CheckBox(CO(a), NI(w)).setChecked(v != 0); TM_END }
+int  tm_checkbox_is_checked(tm_app* a, tm_widget w)             { TM_BEGIN return CheckBox(CO(a), NI(w)).isChecked() ? 1 : 0; TM_END_V(0) return 0; }
+void tm_on_toggled(tm_app* a, tm_widget w, TmSlot fn, void* user) {
+    TM_BEGIN tm_widget src = w;
+        CheckBox(CO(a), NI(w)).toggled().connect([fn, user, src](bool on) { TmEvent ev{TM_EV_TOGGLED, src, on ? 1 : 0, nullptr}; if (fn) fn(&ev, user); });
+    TM_END
+}
+
+tm_widget tm_add_optiongroup(tm_app* a, tm_widget c, int mode) { TM_BEGIN return PK(VBox(CO(a), NI(c)).addOptionGroup(mode == 1 ? SelectMode::Many : SelectMode::One).id()); TM_END_V(0) return 0; }
+void tm_optiongroup_set_options(tm_app* a, tm_widget w, const char* s)  { TM_BEGIN OptionGroup(CO(a), NI(w)).setOptions(splitNL(s)); TM_END }
+void tm_optiongroup_set_orientation(tm_app* a, tm_widget w, TmAxis ax)  { TM_BEGIN OptionGroup(CO(a), NI(w)).setOrientation(ax == TM_AXIS_V ? Axis::Vertical : Axis::Horizontal); TM_END }
+void tm_optiongroup_set_selected_index(tm_app* a, tm_widget w, int i)   { TM_BEGIN OptionGroup(CO(a), NI(w)).setSelectedIndex(i); TM_END }
+int  tm_optiongroup_selected_index(tm_app* a, tm_widget w)              { TM_BEGIN return OptionGroup(CO(a), NI(w)).selectedIndex(); TM_END_V(0) return 0; }
+void tm_optiongroup_set_selected(tm_app* a, tm_widget w, int i, int on) { TM_BEGIN OptionGroup(CO(a), NI(w)).setSelected(i, on != 0); TM_END }
+int  tm_optiongroup_is_selected(tm_app* a, tm_widget w, int i)          { TM_BEGIN return OptionGroup(CO(a), NI(w)).isSelected(i) ? 1 : 0; TM_END_V(0) return 0; }
+void tm_on_option_changed(tm_app* a, tm_widget w, TmSlot fn, void* user) {
+    TM_BEGIN tm_widget src = w;
+        OptionGroup(CO(a), NI(w)).selectionChanged().connect([fn, user, src](int i) { TmEvent ev{TM_EV_SELECTION_CHANGED, src, i, nullptr}; if (fn) fn(&ev, user); });
+    TM_END
+}
+
+tm_widget tm_add_combobox(tm_app* a, tm_widget c) { TM_BEGIN return PK(VBox(CO(a), NI(c)).addComboBox().id()); TM_END_V(0) return 0; }
+void tm_combobox_set_options(tm_app* a, tm_widget w, const char* s)   { TM_BEGIN ComboBox(CO(a), NI(w)).setOptions(splitNL(s)); TM_END }
+void tm_combobox_set_selected_index(tm_app* a, tm_widget w, int i)    { TM_BEGIN ComboBox(CO(a), NI(w)).setSelectedIndex(i); TM_END }
+int  tm_combobox_selected_index(tm_app* a, tm_widget w)              { TM_BEGIN return ComboBox(CO(a), NI(w)).selectedIndex(); TM_END_V(0) return 0; }
+size_t tm_combobox_selected_text(tm_app* a, tm_widget w, char* buf, size_t cap) { TM_BEGIN return copyOut(ComboBox(CO(a), NI(w)).selectedText(), buf, cap); TM_END_V(0) return 0; }
+void tm_combobox_set_placeholder(tm_app* a, tm_widget w, const char* t) { TM_BEGIN ComboBox(CO(a), NI(w)).setPlaceholder(t ? t : ""); TM_END }
+void tm_on_combo_changed(tm_app* a, tm_widget w, TmSlot fn, void* user) {
+    TM_BEGIN tm_widget src = w;
+        ComboBox(CO(a), NI(w)).selectionChanged().connect([fn, user, src](int i) { TmEvent ev{TM_EV_SELECTION_CHANGED, src, i, nullptr}; if (fn) fn(&ev, user); });
+    TM_END
+}
+
+tm_widget tm_add_progressbar(tm_app* a, tm_widget c) { TM_BEGIN return PK(VBox(CO(a), NI(c)).addProgressBar().id()); TM_END_V(0) return 0; }
+void tm_progressbar_set_value(tm_app* a, tm_widget w, int v) { TM_BEGIN ProgressBar(CO(a), NI(w)).setValue(v); TM_END }
+int  tm_progressbar_value(tm_app* a, tm_widget w)           { TM_BEGIN return ProgressBar(CO(a), NI(w)).value(); TM_END_V(0) return 0; }
+
+tm_widget tm_add_textarea(tm_app* a, tm_widget c) { TM_BEGIN return PK(VBox(CO(a), NI(c)).addTextArea().id()); TM_END_V(0) return 0; }
+void tm_textarea_set_text(tm_app* a, tm_widget w, const char* t)    { TM_BEGIN TextArea(CO(a), NI(w)).setText(t ? t : ""); TM_END }
+size_t tm_textarea_text(tm_app* a, tm_widget w, char* buf, size_t cap) { TM_BEGIN return copyOut(TextArea(CO(a), NI(w)).text(), buf, cap); TM_END_V(0) return 0; }
+void tm_textarea_append_line(tm_app* a, tm_widget w, const char* t) { TM_BEGIN TextArea(CO(a), NI(w)).appendLine(t ? t : ""); TM_END }
+void tm_textarea_set_readonly(tm_app* a, tm_widget w, int r)        { TM_BEGIN TextArea(CO(a), NI(w)).setReadOnly(r != 0); TM_END }
+void tm_textarea_set_wordwrap(tm_app* a, tm_widget w, int wr)       { TM_BEGIN TextArea(CO(a), NI(w)).setWordWrap(wr != 0); TM_END }
+void tm_textarea_set_placeholder(tm_app* a, tm_widget w, const char* t) { TM_BEGIN TextArea(CO(a), NI(w)).setPlaceholder(t ? t : ""); TM_END }
+void tm_on_textarea_changed(tm_app* a, tm_widget w, TmSlot fn, void* user) {
+    TM_BEGIN tm_widget src = w;
+        TextArea(CO(a), NI(w)).textChanged().connect([fn, user, src](const std::string& s) { TmEvent ev{TM_EV_TEXT_CHANGED, src, 0, s.c_str()}; if (fn) fn(&ev, user); });
+    TM_END
+}
+
+tm_widget tm_add_frame(tm_app* a, tm_widget c, const char* title) { TM_BEGIN return PK(VBox(CO(a), NI(c)).addFrame(title ? title : "").id()); TM_END_V(0) return 0; }
+void tm_frame_set_title(tm_app* a, tm_widget w, const char* t)    { TM_BEGIN Frame(CO(a), NI(w)).setTitle(t ? t : ""); TM_END }
+tm_widget tm_add_scrollview(tm_app* a, tm_widget c) { TM_BEGIN return PK(VBox(CO(a), NI(c)).addScrollView().id()); TM_END_V(0) return 0; }
+void tm_scrollview_scroll_to(tm_app* a, tm_widget w, int x, int y) { TM_BEGIN ScrollView(CO(a), NI(w)).scrollTo(x, y); TM_END }
+
 /* dialogs */
 void tm_dialog_info(tm_app* a, tm_widget win, const char* msg) {
     TM_BEGIN a->app->dialogs().info(Window(CO(a), NI(win)), msg ? msg : ""); TM_END

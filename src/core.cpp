@@ -222,7 +222,10 @@ void LabelNode::draw(Core&, Canvas& cv, const Theme& th) {
 Size ButtonNode::contentSize(Core&, Backend& be) { return {be.measureWidth(text) + 4, 1}; }
 void ButtonNode::draw(Core& core, Canvas& cv, const Theme& th) {
     bool foc = core.focused == self;
-    Style st = th.get(foc ? Role::ButtonFocused : Role::Button);
+    Role base = Role::Button;
+    switch (variant) { case 1: base = Role::ButtonPrimary; break; case 2: base = Role::ButtonDanger; break; case 3: base = Role::ButtonQuiet; break; }
+    Style st = th.get(foc ? Role::ButtonFocused : base);
+    if (isDefault) st.bold = true;
     cv.fill(bounds, st);
     std::string label = "[ " + text + " ]";
     cv.drawText(bounds.x, bounds.y, label, st);
@@ -295,6 +298,205 @@ bool ListViewNode::handleKey(Core&, const KeyEvent& ev) {
     if (ev.key == Key::Home)      { sel = 0; return true; }
     if (ev.key == Key::End)       { sel = (int)items.size() - 1; return true; }
     if (ev.key == Key::Enter)     { activated.emit(sel); return true; }
+    return false;
+}
+
+// ===========================================================================
+// P5 selection & input widgets (§5.10)
+// ===========================================================================
+Size CheckBoxNode::contentSize(Core&, Backend& be) { return {be.measureWidth(text) + 4, 1}; }
+void CheckBoxNode::draw(Core& core, Canvas& cv, const Theme& th) {
+    bool foc = core.focused == self;
+    Style st = th.get(foc ? Role::OptionFocused : Role::Option);
+    cv.fill(bounds, st);
+    std::string label = std::string(checked ? "[x] " : "[ ] ") + text;
+    cv.drawText(bounds.x, bounds.y, label, st);
+}
+bool CheckBoxNode::handleKey(Core&, const KeyEvent& ev) {
+    if (ev.key == Key::Enter || (ev.key == Key::Char && ev.ch == U' ')) { checked = !checked; toggled.emit(checked); return true; }
+    return false;
+}
+
+Size OptionGroupNode::contentSize(Core&, Backend& be) {
+    if (orient == Axis::Vertical) {
+        int w = 0; for (auto& s : options) w = std::max(w, be.measureWidth(s) + 4);
+        return {std::max(w, 4), std::max(1, (int)options.size())};
+    }
+    int tot = 0; for (auto& s : options) tot += be.measureWidth(s) + 4 + 1;
+    return {std::max(tot, 4), 1};
+}
+void OptionGroupNode::draw(Core& core, Canvas& cv, const Theme& th) {
+    bool foc = core.focused == self;
+    cv.fill(bounds, th.get(Role::Option));
+    int x = bounds.x, y = bounds.y;
+    for (size_t i = 0; i < options.size(); ++i) {
+        bool sel = i < on.size() && on[i];
+        bool cur = foc && (int)i == cursor;
+        Style st = th.get(cur ? Role::OptionFocused : Role::Option);
+        const char* mark = (mode == 0) ? (sel ? "(*) " : "( ) ") : (sel ? "[x] " : "[ ] ");
+        std::string label = std::string(mark) + options[i];
+        if (orient == Axis::Vertical) { cv.drawText(x, y, label, st); ++y; }
+        else { cv.drawText(x, y, label, st); x += (int)label.size() + 1; }
+    }
+}
+bool OptionGroupNode::handleKey(Core&, const KeyEvent& ev) {
+    if (options.empty()) return false;
+    bool vert = orient == Axis::Vertical;
+    Key prev = vert ? Key::Up : Key::Left, next = vert ? Key::Down : Key::Right;
+    auto selectCur = [&] { std::fill(on.begin(), on.end(), 0); on[cursor] = 1; selectionChanged.emit(cursor); };
+    if (ev.key == prev) { cursor = std::max(0, cursor - 1); if (mode == 0) selectCur(); return true; }
+    if (ev.key == next) { cursor = std::min((int)options.size() - 1, cursor + 1); if (mode == 0) selectCur(); return true; }
+    if ((ev.key == Key::Char && ev.ch == U' ') || (ev.key == Key::Enter && mode == 0)) {
+        if (mode == 0) selectCur();
+        else { on[cursor] = on[cursor] ? 0 : 1; selectionChanged.emit(cursor); }
+        return true;
+    }
+    return false;
+}
+
+Size ComboBoxNode::contentSize(Core&, Backend& be) {
+    int w = be.measureWidth(placeholder);
+    for (auto& s : options) w = std::max(w, be.measureWidth(s));
+    return {std::max(w + 4, 8), 1};
+}
+void ComboBoxNode::draw(Core& core, Canvas& cv, const Theme& th) {
+    bool foc = core.focused == self;
+    Style st = th.get(foc ? Role::ComboFocused : Role::Combo);
+    cv.fill(bounds, st);
+    std::string label = (sel >= 0 && sel < (int)options.size()) ? options[sel] : placeholder;
+    cv.drawText(bounds.x + 1, bounds.y, label, st);
+    if (bounds.w >= 3) cv.drawText(bounds.right() - 2, bounds.y, "v", st);
+}
+bool ComboBoxNode::handleKey(Core&, const KeyEvent& ev) {
+    if (open) {
+        if (ev.key == Key::Up)    { cursor = std::max(0, cursor - 1); return true; }
+        if (ev.key == Key::Down)  { cursor = std::min((int)options.size() - 1, cursor + 1); return true; }
+        if (ev.key == Key::Enter || (ev.key == Key::Char && ev.ch == U' ')) { sel = cursor; open = false; selectionChanged.emit(sel); return true; }
+        if (ev.key == Key::Escape){ open = false; return true; }
+        return true;
+    }
+    if (ev.key == Key::Enter || (ev.key == Key::Char && ev.ch == U' ')) { if (!options.empty()) { open = true; cursor = sel >= 0 ? sel : 0; } return true; }
+    if (ev.key == Key::Up)   { if (sel > 0) { --sel; selectionChanged.emit(sel); } return true; }
+    if (ev.key == Key::Down) { if (sel < (int)options.size() - 1) { ++sel; selectionChanged.emit(sel); } return true; }
+    return false;
+}
+
+Size ProgressBarNode::contentSize(Core&, Backend&) { return {12, 1}; }
+void ProgressBarNode::draw(Core&, Canvas& cv, const Theme& th) {
+    Style track = th.get(Role::ProgressTrack), fillc = th.get(Role::ProgressFill);
+    cv.fill(bounds, track);
+    int filled = bounds.w * value / 100;
+    if (filled > 0) cv.fill({bounds.x, bounds.y, filled, bounds.h}, fillc);
+    std::string lbl = std::to_string(value) + "%";
+    int lx = bounds.x + (bounds.w - (int)lbl.size()) / 2;
+    for (int i = 0; i < (int)lbl.size(); ++i) {
+        int px = lx + i;
+        if (px < bounds.x || px >= bounds.right()) continue;
+        cv.set(px, bounds.y, (char32_t)lbl[i], (px < bounds.x + filled) ? fillc : track);
+    }
+}
+
+Size TextAreaNode::contentSize(Core&, Backend& be) {
+    int w = 0; for (auto& l : lines) w = std::max(w, be.measureWidth(l));
+    return {std::max(w + 1, 10), std::max((int)lines.size(), 3)};
+}
+void TextAreaNode::draw(Core& core, Canvas& cv, const Theme& th) {
+    bool foc = core.focused == self;
+    Style st = th.get(foc ? Role::InputFocused : Role::Input);
+    cv.fill(bounds, st);
+    int rows = bounds.h;
+    if (cy < top) top = cy;
+    if (cy >= top + rows) top = cy - rows + 1;
+    if (top < 0) top = 0;
+    bool empty = (lines.size() == 1 && lines[0].empty());
+    if (empty && !foc && !placeholder.empty()) { cv.drawText(bounds.x, bounds.y, placeholder, st); return; }
+    for (int r = 0; r < rows; ++r) {
+        int idx = top + r;
+        if (idx >= (int)lines.size()) break;
+        cv.drawText(bounds.x, bounds.y + r, lines[idx], st);
+    }
+    if (foc) {
+        int cyr = cy - top;
+        if (cyr >= 0 && cyr < rows) {
+            int px = bounds.x + cx;
+            if (px < bounds.right()) {
+                Style cs = st; cs.reverse = true;
+                const std::string& ln = lines[cy];
+                char32_t under = (cx < (int)ln.size()) ? (char32_t)ln[cx] : U' ';
+                cv.set(px, bounds.y + cyr, under, cs);
+            }
+        }
+    }
+}
+bool TextAreaNode::handleKey(Core&, const KeyEvent& ev) {
+    if (readOnly) {
+        if (ev.key == Key::Up)   { if (cy > 0) { --cy; cx = std::min(cx, (int)lines[cy].size()); } return true; }
+        if (ev.key == Key::Down) { if (cy < (int)lines.size() - 1) { ++cy; cx = std::min(cx, (int)lines[cy].size()); } return true; }
+        return false;
+    }
+    std::string& ln = lines[cy];
+    bool changed = false;
+    if (ev.key == Key::Char && ev.ch >= 0x20) { ln.insert(ln.begin() + std::min(cx, (int)ln.size()), (char)ev.ch); ++cx; changed = true; }
+    else if (ev.key == Key::Enter) {
+        std::string rest = ln.substr(std::min(cx, (int)ln.size()));
+        ln.erase(std::min(cx, (int)ln.size()));
+        lines.insert(lines.begin() + cy + 1, rest); ++cy; cx = 0; changed = true;
+    }
+    else if (ev.key == Key::Backspace) {
+        if (cx > 0) { ln.erase(ln.begin() + (cx - 1)); --cx; changed = true; }
+        else if (cy > 0) { cx = (int)lines[cy - 1].size(); lines[cy - 1] += ln; lines.erase(lines.begin() + cy); --cy; changed = true; }
+    }
+    else if (ev.key == Key::Left)  { if (cx > 0) --cx; else if (cy > 0) { --cy; cx = (int)lines[cy].size(); } }
+    else if (ev.key == Key::Right) { if (cx < (int)ln.size()) ++cx; else if (cy < (int)lines.size() - 1) { ++cy; cx = 0; } }
+    else if (ev.key == Key::Up)    { if (cy > 0) { --cy; cx = std::min(cx, (int)lines[cy].size()); } }
+    else if (ev.key == Key::Down)  { if (cy < (int)lines.size() - 1) { ++cy; cx = std::min(cx, (int)lines[cy].size()); } }
+    else if (ev.key == Key::Home)  { cx = 0; }
+    else if (ev.key == Key::End)   { cx = (int)ln.size(); }
+    else return false;
+    if (changed) textChanged.emit(joined());
+    return true;
+}
+
+// ----- Frame / ScrollView (containers) ----------------------------------------
+void FrameNode::draw(Core&, Canvas& cv, const Theme& th) {
+    cv.box(bounds, th.get(Role::FrameBorder));
+    if (!title.empty() && bounds.w > 4) {
+        std::string t = " " + title + " ";
+        cv.drawText(bounds.x + 2, bounds.y, t, th.get(Role::FrameTitle));
+    }
+}
+void ScrollViewNode::arrange(Core& core, Backend& be) {
+    if (children.empty()) return;
+    Node* c = core.resolve(children[0]);
+    if (!c) return;
+    Size cs = c->contentSize(core, be);
+    contentW = std::max(cs.w, bounds.w);
+    contentH = std::max(cs.h, 1);
+    int maxOffY = std::max(0, contentH - bounds.h);
+    offY = std::max(0, std::min(offY, maxOffY));
+    int maxOffX = std::max(0, contentW - bounds.w);
+    offX = std::max(0, std::min(offX, maxOffX));
+    c->bounds = {bounds.x - offX, bounds.y - offY, contentW, contentH};
+    c->arrange(core, be);
+}
+void ScrollViewNode::draw(Core&, Canvas& cv, const Theme& th) {
+    cv.fill(bounds, th.get(Role::WindowBg));
+    if (contentH > bounds.h && bounds.h > 0) {
+        int x = bounds.right() - 1;
+        cv.vline(x, bounds.y, bounds.h, U'│', th.get(Role::ScrollTrack));
+        int thumbH = std::max(1, bounds.h * bounds.h / contentH);
+        int thumbY = bounds.y + (bounds.h - thumbH) * offY / std::max(1, contentH - bounds.h);
+        cv.vline(x, thumbY, thumbH, U'█', th.get(Role::ScrollThumb));
+    }
+}
+bool ScrollViewNode::handleKey(Core&, const KeyEvent& ev) {
+    int maxOffY = std::max(0, contentH - bounds.h);
+    if (ev.key == Key::Down)     { if (offY < maxOffY) ++offY; return true; }
+    if (ev.key == Key::Up)       { if (offY > 0) --offY; return true; }
+    if (ev.key == Key::PageDown) { offY = std::min(maxOffY, offY + bounds.h); return true; }
+    if (ev.key == Key::PageUp)   { offY = std::max(0, offY - bounds.h); return true; }
+    if (ev.key == Key::Home)     { offY = 0; return true; }
+    if (ev.key == Key::End)      { offY = maxOffY; return true; }
     return false;
 }
 
@@ -409,7 +611,7 @@ void Core::drawNode(NodeId id, Canvas& cv) {
     if (!n || !n->visible) return;
     Canvas sub = cv.sub(n->bounds);
     n->draw(*this, sub, theme);
-    for (NodeId c : n->children) drawNode(c, cv);
+    for (NodeId c : n->children) drawNode(c, sub);   // clip children to parent (enables ScrollView)
 }
 
 void Core::render(CellBuffer& out) {
@@ -445,7 +647,32 @@ void Core::render(CellBuffer& out) {
             }
         }
     }
+    // open combobox dropdown (overlay, unclipped)
+    for (auto& up : slots) {
+        auto* cb = dynamic_cast<ComboBoxNode*>(up.get());
+        if (!cb || !cb->open || cb->options.empty()) continue;
+        Rect db{cb->bounds.x, cb->bounds.bottom(), cb->bounds.w, (int)cb->options.size() + 2};
+        cb->popup = db;
+        cv.fill(db, theme.get(Role::DropdownBg));
+        cv.box(db, theme.get(Role::DropdownBg));
+        for (size_t i = 0; i < cb->options.size(); ++i) {
+            bool selrow = ((int)i == cb->cursor);
+            Style st = theme.get(selrow ? Role::DropdownSel : Role::DropdownBg);
+            Rect row{db.x + 1, db.y + 1 + (int)i, db.w - 2, 1};
+            cv.fill(row, st);
+            cv.drawText(db.x + 1, db.y + 1 + (int)i, cb->options[i], st);
+        }
+    }
+
     for (NodeId p : popups) drawNode(p, cv);
+}
+
+static ButtonNode* findDefaultBtn(Core& core, NodeId id) {
+    Node* n = core.resolve(id);
+    if (!n || !n->visible) return nullptr;
+    if (auto* b = dynamic_cast<ButtonNode*>(n)) if (b->isDefault && b->enabled) return b;
+    for (NodeId c : n->children) if (auto* r = findDefaultBtn(core, c)) return r;
+    return nullptr;
 }
 
 bool Core::dispatchKey(const KeyEvent& ev) {
@@ -480,7 +707,11 @@ bool Core::dispatchKey(const KeyEvent& ev) {
     if (ev.key == Key::Tab)     { focusStep(+1); return true; }
     if (ev.key == Key::BackTab) { focusStep(-1); return true; }
     // 4. focused widget
-    if (Node* f = resolve(focused)) return f->handleKey(*this, ev);
+    if (Node* f = resolve(focused)) { if (f->handleKey(*this, ev)) return true; }
+    // 5. default button fires on an otherwise-unhandled Enter
+    if (ev.key == Key::Enter) {
+        if (ButtonNode* db = findDefaultBtn(*this, activeRoot())) { db->clicked.emit(); return true; }
+    }
     return false;
 }
 
