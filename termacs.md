@@ -785,9 +785,9 @@ Today `termacs-core/CMakeLists.txt` builds `libtermacsjni.so` by reaching sidewa
 - **Per-repo READMEs** carry the *practical* layer: what the repo is, how to build it, how it depends on the others. `termacs-java`'s README summarizes binding specifics (§8) and links back to the canonical spec. Reference/usage docs, **not** design.
 - **No umbrella `termacs` repo.** The orchestration that lived in root `build.sh` is replaced by each repo building itself (`termacs-java`'s build drives core via §15.1).
 
-### 15.4 Migration plan — *status: not yet done; the repos are source mirrors*
+### 15.4 Migration plan — *status: ✅ R0–R6 complete; the three repos are canonical and build standalone*
 
-The three pushed repos are currently *source snapshots* of the monorepo subdirs and are **not independently buildable** (cross-repo paths broken, no per-repo build entry point, spec/orchestration absent). The decoupling is done **once in the monorepo** (cheap — tests already wired), then the repos become canonical and the monorepo is retired (§15 intro). Phases — **plan only, no code yet:**
+The decoupling was done once in the monorepo, the repos were seeded by force-push, tagged (`termacs-core` `v0.1.0`), and the monorepo retired. Verified from a clean GitHub clone: `termacs-core` builds + tests (`--recursive`), `termacs-java` builds its JNI by FetchContent-ing core `v0.1.0` and passes `HeadlessTest`, and `termacs-java-demo` compiles against the binding and renders. CI workflows run per repo (R6). Phases:
 
 | Phase | Goal | Key work | Exit criterion (green-bar) | Depends on |
 |---|---|---|---|---|
