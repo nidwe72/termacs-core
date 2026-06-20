@@ -369,11 +369,53 @@ ta.setWordWrap(true);                     // wrap vs. horizontal scroll
 ta.appendLine("…");
 ta.textChanged().connect([](const std::string& t){ … });
 ```
-Scrolls within its viewport — **depends on `ScrollView` (same P5 wave)**. Tab moves focus (preserves traversal); literal indent is opt-in, not default.
+Scrolls within its viewport — **depends on `ScrollView` (same P5 wave)**. Draws a **vertical scrollbar** (`scroll.track`/`scroll.thumb`, thumb sized `viewport/content`) when the line count exceeds its height, and a horizontal overflow indicator when `wrap` is off. Tab moves focus (preserves traversal); literal indent is opt-in, not default. Editing/navigation/selection follow the shared text-editing model (§5.11).
 
 **New theme roles:** `combo.{bg,border,arrow}`, `dropdown.{bg,selected}`, `option.{mark,selected}`, `checkbox.mark`, `button.{primary,danger,quiet}.*`, `textarea.{bg,text,cursor,placeholder}`.
 
 **Bindings** project the signal accessors as `onX` callbacks (`cb.onSelectionChanged(i -> …)`, `c.onToggled(on -> …)`, etc.), consistent with the existing widget set (§8).
+
+### 5.11 Text editing model *(shared by `LineEdit` and `TextArea`)*
+
+Both editable widgets share **one model**, so navigation, selection, and clipboard behave identically across them; `LineEdit` is the single-line specialization. The model is **decoupled from rendering** — a pure `TextBuffer` (text + cursor + selection + edit/clipboard ops); the widgets only *draw* it.
+
+#### 5.11.1 Backing store — Boost.Text, hidden behind the ABI
+The buffer is backed by **[Boost.Text](https://github.com/tzlaine/text)** (a UTF-8-aware rope), added as a pinned **core-internal** dependency. The size is deliberate: it buys O(log n) edits *and* Unicode correctness — **grapheme-cluster cursor movement** and **word-break iteration** — which we'd otherwise hand-roll badly. Crucially, the dependency is **invisible across the C ABI**: every editing operation is projected as flat `tm_*` calls, so the **editing API is language-independent** — Java/Python/Dart bindings get the identical surface with no knowledge of (or link against) Boost.Text. Only `termacs-core` links it. (`TextBuffer` remains an abstraction seam; the backing could change without touching the ABI.)
+
+#### 5.11.2 Selection model
+A `cursor` plus an optional `anchor`; the selection is the span `[anchor, cursor)`. Inserting text or pasting **replaces** a non-empty selection. Cursor and word/line boundaries are **grapheme-aware** (a combining sequence or wide glyph moves as one unit, via Boost.Text). `textChanged` fires on any edit; a new `selectionChanged` fires when the span changes.
+
+#### 5.11.3 Keyboard shortcuts (CUA)
+| Action | Keys |
+|---|---|
+| Move char / line | ←→ / ↑↓ |
+| Move **word** | Ctrl+←→ (Unicode word-break) |
+| Line start / end | Home / End |
+| Document start / end | Ctrl+Home / Ctrl+End |
+| Page (TextArea) | PageUp / PageDown |
+| **Extend selection** | **Shift +** any move above |
+| Select all | Ctrl+A |
+| Delete word | Ctrl+Backspace / Ctrl+Delete |
+| **Copy / Cut / Paste** | **Ctrl+C / Ctrl+X / Ctrl+V** (also Ctrl+Insert / Shift+Delete / Shift+Insert) |
+
+> **Ctrl+C is copy, globally** *(decision)*. termacs runs the terminal in raw mode, so Ctrl+C arrives as a key, **not** SIGINT — it never interrupts the app. A "quit" gesture is therefore explicit (menu / button / Esc), never Ctrl+C. The terminal-restoring signal handler (§11.8) still covers a real SIGTERM / crash, so the shell is never left wrecked.
+
+#### 5.11.4 Clipboard (backend seam — §6 / §11.5)
+- An **internal clipboard register** in core is the source of truth — copy/cut/paste always work app-internally, with zero terminal support.
+- **Copy/cut write through to the system clipboard via OSC 52** (`Backend::setClipboard`) — best-effort, travels over SSH. ⚠ OSC 52 has real-world bugs (UTF-8 corruption, newline mangling on some terminals), so it is **advisory**: termacs owns the UTF-8 encoding carefully and never blocks on it.
+- **Paste arrives via bracketed-paste mode**: the terminal wraps pasted text in `ESC[200~…ESC[201~`; the backend normalizes it to a single **`Paste`** `InputEvent` (§11.5), so a multi-line paste inserts atomically and is never interpreted as keystrokes/shortcuts. Ctrl+V pastes the internal register; a terminal paste delivers the *system* clipboard as a `Paste` event.
+
+#### 5.11.5 API additions (projected to every binding)
+```cpp
+// shared editing surface on LineEdit and TextArea
+void                selectAll();
+void                setSelection(int anchor, int cursor);
+std::pair<int,int>  selection() const;          // {anchor, cursor}
+std::string         selectedText() const;
+void                copy();  void cut();  void paste();   // register + OSC 52
+Signal<>&           selectionChanged();
+```
+Java: `selectAll()`, `copy()/cut()/paste()`, `onSelectionChanged(...)`. (Status: design only — implementation pending an explicit request; it extends the §5.10 widgets, C ABI v3.)
 
 ---
 
@@ -388,6 +430,7 @@ struct Backend {
     virtual int          measureWidth(StrView) = 0;   // display cells for a string (CJK/combining/emoji)
     virtual void         present(const CellBuffer&) = 0;  // blit a frame; downsamples color to caps()
     virtual bool         pollInput(InputEvent& out) = 0;  // NORMALIZED events, non-blocking
+    virtual void         setClipboard(StrView) = 0;   // write system clipboard (OSC 52, best-effort)
     virtual void         wake() = 0;                  // thread-safe: unblock the loop (see §11)
     virtual void         shutdown() = 0;              // restore terminal state; must be panic-safe
 };
@@ -395,7 +438,8 @@ struct Backend {
 
 - `present` takes truecolor styled cells and **downsamples** to whatever `caps()` reports (truecolor → 256 → 16).
 - `measureWidth` is the single source of truth for text width — the layout engine uses it so measurement always matches what the backend renders (closes the font/width drift in §11).
-- `pollInput` returns **normalized** `InputEvent`s: typed `Key`+`Modifiers`, mouse, and **`Resized`** — never raw escape bytes.
+- `pollInput` returns **normalized** `InputEvent`s: typed `Key`+`Modifiers`, mouse, **`Resized`**, and **`Paste`** (bracketed-paste, §11.5) — never raw escape bytes.
+- `setClipboard` pushes copied/cut text to the system clipboard via **OSC 52** (best-effort, travels over SSH); the text-editing model (§5.11) is the only caller. Reading the system clipboard is widely unsupported, so termacs never depends on it — incoming paste arrives as a `Paste` event instead.
 - `TvisionBackend` implements it over magiblot/tvision (Linux/Windows/Termux).
 - A future `AndroidCanvasBackend` implements the same interface against a `SurfaceView`/`Canvas`; a `HeadlessBackend` renders to an in-memory buffer for snapshot tests (§11).
 - Keeping this seam honest is what makes the b2 abstraction real instead of a leaky re-skin.
@@ -577,6 +621,8 @@ A TUI framework lives or dies on how it handles the messy reality of terminals. 
 ### 11.5 Input normalization
 
 - Key encoding is terminal-specific chaos (escape sequences, Esc-vs-Alt, kitty keyboard protocol, bracketed paste, function keys). The backend normalizes everything to a typed `Key` + `Modifiers`; the core and public API **never** see raw escape bytes. Mouse is normalized too (and optional — keyboard is the spine, §5.8).
+- **Modifiers are first-class.** The text-editing model (§5.11) needs `Ctrl`/`Shift` combined with arrows/letters (Ctrl+←→ word-move, Shift+arrow select, Ctrl+A/C/X/V), so the backend must deliver these as `Key`+`Modifiers`, not swallow them. **Ctrl+C is delivered as a key** (raw mode, no SIGINT) — copy, never interrupt (§5.11.3).
+- **Bracketed paste → a `Paste` event.** With bracketed-paste mode enabled, the backend collects everything between `ESC[200~` and `ESC[201~` into one normalized **`Paste`** `InputEvent` carrying the pasted text — so pasted content is inserted verbatim and never mis-parsed as shortcuts or control keys.
 
 ### 11.6 Threading model & the one thread-safe door
 
