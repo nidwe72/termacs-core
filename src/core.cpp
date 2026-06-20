@@ -235,37 +235,77 @@ bool ButtonNode::handleKey(Core&, const KeyEvent& ev) {
     return false;
 }
 
-Size LineEditNode::contentSize(Core&, Backend& be) { return {std::max(be.measureWidth(text) + 1, 6), 1}; }
+// ===========================================================================
+// Shared text-editing helpers (§5.11) for LineEdit + TextArea
+// ===========================================================================
+namespace {
+std::u32string decodeCps(const std::string& s) {
+    std::u32string out; int i = 0, n = (int)s.size();
+    while (i < n) {
+        unsigned char c = s[i]; int len = c < 0x80 ? 1 : (c >> 5) == 6 ? 2 : (c >> 4) == 14 ? 3 : (c >> 3) == 30 ? 4 : 1;
+        char32_t cp = c < 0x80 ? c : (c >> 5) == 6 ? (c & 0x1F) : (c >> 4) == 14 ? (c & 0x0F) : (c & 0x07);
+        for (int k = 1; k < len && i + k < n; ++k) cp = (cp << 6) | (s[i + k] & 0x3F);
+        out.push_back(cp); i += len;
+    }
+    return out;
+}
+int cpLen(const std::string& s) { return (int)decodeCps(s).size(); }
+
+// Render one row of text with a selection highlight (cols [selLo,selHi)) and an
+// optional block caret at caretCol (-1 = none). Background is pre-filled.
+void renderRow(Canvas& cv, int x0, int y, int width, Style base, const std::string& lineUtf8,
+               int selLo, int selHi, int caretCol) {
+    std::u32string cps = decodeCps(lineUtf8);
+    for (int col = 0; col < width; ++col) {
+        bool inSel  = col >= selLo && col < selHi;
+        bool caret  = col == caretCol;
+        char32_t ch = col < (int)cps.size() ? cps[col] : U' ';
+        if (!inSel && !caret) { if (col < (int)cps.size()) cv.set(x0 + col, y, ch, base); continue; }
+        Style st = base; st.reverse = inSel; if (caret) st.reverse = !st.reverse;
+        cv.set(x0 + col, y, ch, st);
+    }
+}
+
+// Map key+mods to TextBuffer edits (§5.11.3). Returns 0 not-handled, 1 moved, 2 changed.
+int applyEditKey(Core& core, TextBuffer& buf, const KeyEvent& ev) {
+    bool sh = ev.mods.shift, ct = ev.mods.ctrl;
+    switch (ev.key) {
+        case Key::Left:  ct ? buf.moveWordLeft(sh)  : buf.moveLeft(sh);  return 1;
+        case Key::Right: ct ? buf.moveWordRight(sh) : buf.moveRight(sh); return 1;
+        case Key::Home:  ct ? buf.moveDocStart(sh)  : buf.moveHome(sh);  return 1;
+        case Key::End:   ct ? buf.moveDocEnd(sh)    : buf.moveEnd(sh);   return 1;
+        case Key::Backspace: ct ? buf.deleteWordLeft()  : buf.backspace(); return 2;
+        case Key::Delete:    ct ? buf.deleteWordRight() : buf.del();       return 2;
+        case Key::Char:
+            if (ct) switch (ev.ch) {
+                case U'a': buf.selectAll(); return 1;
+                case U'c': core.clipboard = buf.copy(); if (core.backend) core.backend->setClipboard(core.clipboard); return 1;
+                case U'x': core.clipboard = buf.cut();  if (core.backend) core.backend->setClipboard(core.clipboard); return 2;
+                case U'v': if (!core.clipboard.empty()) { buf.paste(core.clipboard); return 2; } return 1;
+                default:   return 0;
+            }
+            if (ev.ch >= 0x20) { buf.insert(ev.text.empty() ? std::string(1, (char)ev.ch) : ev.text); return 2; }
+            return 0;
+        default: return 0;
+    }
+}
+} // namespace
+
+Size LineEditNode::contentSize(Core&, Backend& be) { return {std::max(be.measureWidth(buf.text()) + 1, 6), 1}; }
 void LineEditNode::draw(Core& core, Canvas& cv, const Theme& th) {
     bool foc = core.focused == self;
     Style st = th.get(foc ? Role::InputFocused : Role::Input);
     cv.fill(bounds, st);
-    cv.drawText(bounds.x, bounds.y, text, st);
-    if (foc) {
-        int cx = bounds.x + cursor;
-        if (cx < bounds.right()) {
-            Style cs = st; cs.reverse = true;
-            char32_t under = (cursor < (int)text.size()) ? (char32_t)text[cursor] : U' ';
-            cv.set(cx, bounds.y, under, cs);
-        }
-    }
+    auto [lo, hi] = buf.selectionRange();
+    renderRow(cv, bounds.x, bounds.y, bounds.w, st, buf.text(),
+              buf.hasSelection() ? lo : 0, buf.hasSelection() ? hi : 0, foc ? buf.cursor() : -1);
 }
-bool LineEditNode::handleKey(Core&, const KeyEvent& ev) {
-    bool changed = false;
-    if (ev.key == Key::Char && ev.ch >= 0x20) {
-        text.insert(text.begin() + std::min(cursor, (int)text.size()), (char)ev.ch);
-        ++cursor; changed = true;
-    } else if (ev.key == Key::Backspace) {
-        if (cursor > 0) { text.erase(text.begin() + (cursor - 1)); --cursor; changed = true; }
-    } else if (ev.key == Key::Delete) {
-        if (cursor < (int)text.size()) { text.erase(text.begin() + cursor); changed = true; }
-    } else if (ev.key == Key::Left)  { if (cursor > 0) --cursor; }
-    else if (ev.key == Key::Right) { if (cursor < (int)text.size()) ++cursor; }
-    else if (ev.key == Key::Home)  { cursor = 0; }
-    else if (ev.key == Key::End)   { cursor = (int)text.size(); }
-    else if (ev.key == Key::Enter) { submitted.emit(); return true; }
-    else return false;
-    if (changed) textChanged.emit(text);
+bool LineEditNode::handleKey(Core& core, const KeyEvent& ev) {
+    if (ev.key == Key::Enter) { submitted.emit(); return true; }
+    int r = applyEditKey(core, buf, ev);
+    if (r == 0) return false;
+    if (r == 2) textChanged.emit(buf.text());
+    selectionChanged.emit();
     return true;
 }
 
@@ -397,63 +437,76 @@ void ProgressBarNode::draw(Core&, Canvas& cv, const Theme& th) {
 }
 
 Size TextAreaNode::contentSize(Core&, Backend& be) {
-    int w = 0; for (auto& l : lines) w = std::max(w, be.measureWidth(l));
-    return {std::max(w + 1, 10), std::max((int)lines.size(), 3)};
+    int w = 0, lc = buf.lineCount();
+    for (int i = 0; i < lc; ++i) w = std::max(w, be.measureWidth(buf.lineAt(i)));
+    return {std::max(w + 1, 10), std::max(lc, 3)};
 }
 void TextAreaNode::draw(Core& core, Canvas& cv, const Theme& th) {
     bool foc = core.focused == self;
     Style st = th.get(foc ? Role::InputFocused : Role::Input);
     cv.fill(bounds, st);
-    int rows = bounds.h;
-    if (cy < top) top = cy;
-    if (cy >= top + rows) top = cy - rows + 1;
+    int rows = bounds.h, lc = buf.lineCount();
+    auto [crow, ccol] = buf.cursorRowCol();
+    if (crow < top) top = crow;
+    if (crow >= top + rows) top = crow - rows + 1;
     if (top < 0) top = 0;
-    bool empty = (lines.size() == 1 && lines[0].empty());
+    bool empty = (lc == 1 && buf.lineAt(0).empty());
     if (empty && !foc && !placeholder.empty()) { cv.drawText(bounds.x, bounds.y, placeholder, st); return; }
+    bool hasScroll = lc > rows;
+    int textW = bounds.w - (hasScroll ? 1 : 0);
+    auto [selLo, selHi] = buf.selectionRange();
+    bool sel = buf.hasSelection();
     for (int r = 0; r < rows; ++r) {
-        int idx = top + r;
-        if (idx >= (int)lines.size()) break;
-        cv.drawText(bounds.x, bounds.y + r, lines[idx], st);
-    }
-    if (foc) {
-        int cyr = cy - top;
-        if (cyr >= 0 && cyr < rows) {
-            int px = bounds.x + cx;
-            if (px < bounds.right()) {
-                Style cs = st; cs.reverse = true;
-                const std::string& ln = lines[cy];
-                char32_t under = (cx < (int)ln.size()) ? (char32_t)ln[cx] : U' ';
-                cv.set(px, bounds.y + cyr, under, cs);
-            }
+        int row = top + r;
+        if (row >= lc) break;
+        std::string line = buf.lineAt(row);
+        int lineStart = buf.offsetOf(row, 0), lineLen = cpLen(line);
+        int sl = 0, sh = 0;
+        if (sel) {
+            int a = std::max(selLo, lineStart) - lineStart, b = std::min(selHi, lineStart + lineLen) - lineStart;
+            if (b > a) { sl = std::max(0, a); sh = std::min(lineLen, b); }
         }
+        int caret = (foc && row == crow) ? ccol : -1;
+        renderRow(cv, bounds.x, bounds.y + r, textW, st, line, sl, sh, caret);
+    }
+    if (hasScroll && rows > 0) {
+        int x = bounds.right() - 1;
+        cv.vline(x, bounds.y, rows, U'│', th.get(Role::ScrollTrack));
+        int thumbH = std::max(1, rows * rows / lc);
+        int thumbY = bounds.y + (rows - thumbH) * top / std::max(1, lc - rows);
+        cv.vline(x, thumbY, thumbH, U'█', th.get(Role::ScrollThumb));
     }
 }
-bool TextAreaNode::handleKey(Core&, const KeyEvent& ev) {
+bool TextAreaNode::handleKey(Core& core, const KeyEvent& ev) {
+    bool sh = ev.mods.shift;
+    if (ev.key == Key::Up)       { buf.moveUp(sh);   selectionChanged.emit(); return true; }
+    if (ev.key == Key::Down)     { buf.moveDown(sh); selectionChanged.emit(); return true; }
+    if (ev.key == Key::PageUp)   { for (int i = 0; i < std::max(1, bounds.h - 1); ++i) buf.moveUp(sh);   selectionChanged.emit(); return true; }
+    if (ev.key == Key::PageDown) { for (int i = 0; i < std::max(1, bounds.h - 1); ++i) buf.moveDown(sh); selectionChanged.emit(); return true; }
+    if (ev.key == Key::Enter) {
+        if (!readOnly) { buf.insert("\n"); textChanged.emit(buf.text()); selectionChanged.emit(); }
+        return true;
+    }
     if (readOnly) {
-        if (ev.key == Key::Up)   { if (cy > 0) { --cy; cx = std::min(cx, (int)lines[cy].size()); } return true; }
-        if (ev.key == Key::Down) { if (cy < (int)lines.size() - 1) { ++cy; cx = std::min(cx, (int)lines[cy].size()); } return true; }
-        return false;
+        bool ct = ev.mods.ctrl;
+        switch (ev.key) {
+            case Key::Left:  ct ? buf.moveWordLeft(sh)  : buf.moveLeft(sh);  break;
+            case Key::Right: ct ? buf.moveWordRight(sh) : buf.moveRight(sh); break;
+            case Key::Home:  ct ? buf.moveDocStart(sh)  : buf.moveHome(sh);  break;
+            case Key::End:   ct ? buf.moveDocEnd(sh)    : buf.moveEnd(sh);   break;
+            case Key::Char:
+                if (ct && ev.ch == U'a') { buf.selectAll(); break; }
+                if (ct && ev.ch == U'c') { core.clipboard = buf.copy(); if (core.backend) core.backend->setClipboard(core.clipboard); break; }
+                return false;
+            default: return false;
+        }
+        selectionChanged.emit();
+        return true;
     }
-    std::string& ln = lines[cy];
-    bool changed = false;
-    if (ev.key == Key::Char && ev.ch >= 0x20) { ln.insert(ln.begin() + std::min(cx, (int)ln.size()), (char)ev.ch); ++cx; changed = true; }
-    else if (ev.key == Key::Enter) {
-        std::string rest = ln.substr(std::min(cx, (int)ln.size()));
-        ln.erase(std::min(cx, (int)ln.size()));
-        lines.insert(lines.begin() + cy + 1, rest); ++cy; cx = 0; changed = true;
-    }
-    else if (ev.key == Key::Backspace) {
-        if (cx > 0) { ln.erase(ln.begin() + (cx - 1)); --cx; changed = true; }
-        else if (cy > 0) { cx = (int)lines[cy - 1].size(); lines[cy - 1] += ln; lines.erase(lines.begin() + cy); --cy; changed = true; }
-    }
-    else if (ev.key == Key::Left)  { if (cx > 0) --cx; else if (cy > 0) { --cy; cx = (int)lines[cy].size(); } }
-    else if (ev.key == Key::Right) { if (cx < (int)ln.size()) ++cx; else if (cy < (int)lines.size() - 1) { ++cy; cx = 0; } }
-    else if (ev.key == Key::Up)    { if (cy > 0) { --cy; cx = std::min(cx, (int)lines[cy].size()); } }
-    else if (ev.key == Key::Down)  { if (cy < (int)lines.size() - 1) { ++cy; cx = std::min(cx, (int)lines[cy].size()); } }
-    else if (ev.key == Key::Home)  { cx = 0; }
-    else if (ev.key == Key::End)   { cx = (int)ln.size(); }
-    else return false;
-    if (changed) textChanged.emit(joined());
+    int r = applyEditKey(core, buf, ev);
+    if (r == 0) return false;
+    if (r == 2) textChanged.emit(buf.text());
+    selectionChanged.emit();
     return true;
 }
 
@@ -723,6 +776,15 @@ NodeId Core::hitTest(NodeId id, int x, int y) {
         if (resolve(h)) return h;            // deepest/topmost child wins
     }
     return id;
+}
+
+void Core::dispatchPaste(const std::string& text) {
+    Node* f = resolve(focused);
+    if (auto* le = dynamic_cast<LineEditNode*>(f)) {
+        le->buf.paste(text); le->textChanged.emit(le->buf.text()); le->selectionChanged.emit();
+    } else if (auto* ta = dynamic_cast<TextAreaNode*>(f)) {
+        if (!ta->readOnly) { ta->buf.paste(text); ta->textChanged.emit(ta->buf.text()); ta->selectionChanged.emit(); }
+    }
 }
 
 bool Core::dispatchMouse(const MouseEvent& ev) {

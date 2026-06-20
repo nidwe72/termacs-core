@@ -13,6 +13,7 @@
 #include "termacs/signal.hpp"
 #include "termacs/sizing.hpp"
 #include "termacs/theme.hpp"
+#include "text_buffer.hpp"
 
 namespace termacs {
 
@@ -105,14 +106,14 @@ public:
 class LineEditNode : public Node {
 public:
     LineEditNode() : Node(NodeKind::LineEdit) { focusable = true; }
-    std::string                text;
-    int                        cursor = 0;   // codepoint index (ASCII-simple)
+    TextBuffer                 buf;          // §5.11 editing model (single-line)
     Signal<const std::string&> textChanged;
     Signal<>                   submitted;
+    Signal<>                   selectionChanged;
     Size contentSize(Core&, Backend&) override;
     void draw(Core&, Canvas&, const Theme&) override;
     bool handleKey(Core&, const KeyEvent&) override;
-    void onRemoved() override { textChanged.clear(); submitted.clear(); }
+    void onRemoved() override { textChanged.clear(); submitted.clear(); selectionChanged.clear(); }
 };
 
 class ListViewNode : public Node {
@@ -182,19 +183,18 @@ public:
 
 class TextAreaNode : public Node {
 public:
-    TextAreaNode() : Node(NodeKind::TextArea) { focusable = true; }
-    std::vector<std::string>   lines{ "" };
-    int  cx = 0, cy = 0;                // cursor col / row
+    TextAreaNode() : Node(NodeKind::TextArea) { buf.setMultiline(true); focusable = true; }
+    TextBuffer  buf;                    // §5.11 editing model (multi-line)
     int  top = 0;                       // first visible row (vertical scroll)
     bool readOnly = false;
     bool wrap = false;
     std::string placeholder;
     Signal<const std::string&> textChanged;
-    std::string joined() const { std::string s; for (size_t i=0;i<lines.size();++i){ if(i) s+='\n'; s+=lines[i]; } return s; }
+    Signal<>                   selectionChanged;
     Size contentSize(Core&, Backend&) override;
     void draw(Core&, Canvas&, const Theme&) override;
     bool handleKey(Core&, const KeyEvent&) override;
-    void onRemoved() override { textChanged.clear(); }
+    void onRemoved() override { textChanged.clear(); selectionChanged.clear(); }
 };
 
 struct MenuItem { std::string label; std::function<void()> onActivate; };
@@ -263,6 +263,7 @@ public:
     std::vector<NodeId> windows;   // root windows (z-order)
     std::vector<NodeId> popups;    // floating layer: open menu / dialogs (top = last)
     NodeId              focused{};
+    std::string         clipboard; // internal clipboard register (§5.11.4)
 
     template <class T, class... A>
     std::pair<NodeId, T*> create(A&&... args) {
@@ -305,6 +306,7 @@ public:
     // input
     bool   dispatchKey(const KeyEvent& ev);
     bool   dispatchMouse(const MouseEvent& ev);
+    void   dispatchPaste(const std::string& text);   // §5.11.4 bracketed paste
     NodeId hitTest(NodeId root, int x, int y);
 
 private:

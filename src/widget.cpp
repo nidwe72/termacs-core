@@ -177,23 +177,24 @@ void ProgressBar::setValue(int v) { reqAs<ProgressBarNode>(core_, id_).value = s
 int  ProgressBar::value() const   { return reqAs<ProgressBarNode>(core_, id_).value; }
 
 // ----- TextArea ---------------------------------------------------------------
-void TextArea::setText(const std::string& t) {
-    auto& n = reqAs<TextAreaNode>(core_, id_);
-    n.lines.clear(); std::string cur;
-    for (char c : t) { if (c == '\n') { n.lines.push_back(cur); cur.clear(); } else cur += c; }
-    n.lines.push_back(cur);
-    if (n.lines.empty()) n.lines.push_back("");
-    n.cy = 0; n.cx = 0; n.top = 0;
-}
-std::string TextArea::text() const { return reqAs<TextAreaNode>(core_, id_).joined(); }
+void TextArea::setText(const std::string& t) { reqAs<TextAreaNode>(core_, id_).buf.setText(t); }
+std::string TextArea::text() const { return reqAs<TextAreaNode>(core_, id_).buf.text(); }
 void TextArea::appendLine(const std::string& t) {
     auto& n = reqAs<TextAreaNode>(core_, id_);
-    if (n.lines.size() == 1 && n.lines[0].empty()) n.lines[0] = t; else n.lines.push_back(t);
+    std::string cur = n.buf.text();
+    n.buf.setText(cur.empty() ? t : cur + "\n" + t);
 }
 void TextArea::setReadOnly(bool r) { reqAs<TextAreaNode>(core_, id_).readOnly = r; }
 void TextArea::setWordWrap(bool w) { reqAs<TextAreaNode>(core_, id_).wrap = w; }
 void TextArea::setPlaceholder(const std::string& p) { reqAs<TextAreaNode>(core_, id_).placeholder = p; }
 Signal<const std::string&>& TextArea::textChanged() { return reqAs<TextAreaNode>(core_, id_).textChanged; }
+// §5.11 editing surface
+void        TextArea::selectAll()          { reqAs<TextAreaNode>(core_, id_).buf.selectAll(); }
+std::string TextArea::selectedText() const { return reqAs<TextAreaNode>(core_, id_).buf.selectedText(); }
+void        TextArea::copy()  { auto& n = reqAs<TextAreaNode>(core_, id_); core_->clipboard = n.buf.copy(); }
+void        TextArea::cut()   { auto& n = reqAs<TextAreaNode>(core_, id_); core_->clipboard = n.buf.cut(); n.textChanged.emit(n.buf.text()); }
+void        TextArea::paste() { auto& n = reqAs<TextAreaNode>(core_, id_); n.buf.paste(core_->clipboard); n.textChanged.emit(n.buf.text()); }
+Signal<>&   TextArea::selectionChanged() { return reqAs<TextAreaNode>(core_, id_).selectionChanged; }
 
 // ----- Frame / ScrollView -----------------------------------------------------
 void Frame::setTitle(const std::string& t) { reqAs<FrameNode>(core_, id_).title = t; }
@@ -202,13 +203,17 @@ void ScrollView::scrollTo(int x, int y) {
 }
 
 // ----- LineEdit ---------------------------------------------------------------
-void LineEdit::setText(const std::string& t) {
-    auto& n = reqAs<LineEditNode>(core_, id_);
-    n.text = t; n.cursor = (int)t.size();
-}
-std::string LineEdit::text() const { return reqAs<LineEditNode>(core_, id_).text; }
+void LineEdit::setText(const std::string& t) { reqAs<LineEditNode>(core_, id_).buf.setText(t); }
+std::string LineEdit::text() const { return reqAs<LineEditNode>(core_, id_).buf.text(); }
 Signal<const std::string&>& LineEdit::textChanged() { return reqAs<LineEditNode>(core_, id_).textChanged; }
 Signal<>&                   LineEdit::submitted()   { return reqAs<LineEditNode>(core_, id_).submitted; }
+// §5.11 editing surface
+void        LineEdit::selectAll()            { reqAs<LineEditNode>(core_, id_).buf.selectAll(); }
+std::string LineEdit::selectedText() const   { return reqAs<LineEditNode>(core_, id_).buf.selectedText(); }
+void        LineEdit::copy()  { auto& n = reqAs<LineEditNode>(core_, id_); core_->clipboard = n.buf.copy(); }
+void        LineEdit::cut()   { auto& n = reqAs<LineEditNode>(core_, id_); core_->clipboard = n.buf.cut(); n.textChanged.emit(n.buf.text()); }
+void        LineEdit::paste() { auto& n = reqAs<LineEditNode>(core_, id_); n.buf.paste(core_->clipboard); n.textChanged.emit(n.buf.text()); }
+Signal<>&   LineEdit::selectionChanged() { return reqAs<LineEditNode>(core_, id_).selectionChanged; }
 
 // ----- ListView ---------------------------------------------------------------
 void ListView::addItem(const std::string& t) { reqAs<ListViewNode>(core_, id_).items.push_back(t); }

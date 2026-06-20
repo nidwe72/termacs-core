@@ -109,6 +109,11 @@ public:
     std::string                 text() const;
     Signal<const std::string&>& textChanged();
     Signal<>&                   submitted();   // Enter pressed in the field
+    // §5.11 editing surface
+    void                        selectAll();
+    std::string                 selectedText() const;
+    void                        copy(); void cut(); void paste();
+    Signal<>&                   selectionChanged();
 };
 
 class ListView : public Widget {
@@ -174,6 +179,11 @@ public:
     void        setWordWrap(bool w);
     void        setPlaceholder(const std::string& p);
     Signal<const std::string&>& textChanged();
+    // §5.11 editing surface
+    void        selectAll();
+    std::string selectedText() const;
+    void        copy(); void cut(); void paste();
+    Signal<>&   selectionChanged();
 };
 
 // ----- menus & status bar -----------------------------------------------------

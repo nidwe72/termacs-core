@@ -57,6 +57,7 @@ const CellBuffer& Application::render() {
 void Application::feed(const InputEvent& ev) {
     if (ev.kind == InputKind::Key) d_->core->dispatchKey(ev.key);
     else if (ev.kind == InputKind::Mouse) d_->core->dispatchMouse(ev.mouse);
+            else if (ev.kind == InputKind::Paste) d_->core->dispatchPaste(ev.paste);
 }
 
 void Application::postToUiThread(std::function<void()> fn) {
@@ -109,6 +110,7 @@ int Application::run() {
         if (d_->backend->pollInput(ev, timeout)) {
             if (ev.kind == InputKind::Key) d_->core->dispatchKey(ev.key);
             else if (ev.kind == InputKind::Mouse) d_->core->dispatchMouse(ev.mouse);
+            else if (ev.kind == InputKind::Paste) d_->core->dispatchPaste(ev.paste);
             // Resize: next render uses backend->size()
         }
     }

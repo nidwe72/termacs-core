@@ -59,6 +59,10 @@ add_executable(tc_textbuffer tests/cpp/textbuffer_test.cpp)
 target_link_libraries(tc_textbuffer termacs)
 add_test(NAME textbuffer COMMAND tc_textbuffer)
 
+add_executable(tc_edit tests/cpp/edit_test.cpp)
+target_link_libraries(tc_edit termacs)
+add_test(NAME edit COMMAND tc_edit)
+
 # Shared C-ABI library (libtermacs.so) — what the language bindings link against
 add_library(termacs_c SHARED cabi/cabi.cpp
     src/cell.cpp src/theme.cpp src/core.cpp src/widget.cpp src/application.cpp
