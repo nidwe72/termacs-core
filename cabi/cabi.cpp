@@ -281,6 +281,24 @@ void tm_frame_set_title(tm_app* a, tm_widget w, const char* t)    { TM_BEGIN Fra
 tm_widget tm_add_scrollview(tm_app* a, tm_widget c) { TM_BEGIN return PK(VBox(CO(a), NI(c)).addScrollView().id()); TM_END_V(0) return 0; }
 void tm_scrollview_scroll_to(tm_app* a, tm_widget w, int x, int y) { TM_BEGIN ScrollView(CO(a), NI(w)).scrollTo(x, y); TM_END }
 
+/* text-editing surface (§5.11) */
+void   tm_lineedit_select_all(tm_app* a, tm_widget w) { TM_BEGIN LineEdit(CO(a), NI(w)).selectAll(); TM_END }
+size_t tm_lineedit_selected_text(tm_app* a, tm_widget w, char* b, size_t c) { TM_BEGIN return copyOut(LineEdit(CO(a), NI(w)).selectedText(), b, c); TM_END_V(0) return 0; }
+void   tm_lineedit_copy(tm_app* a, tm_widget w)  { TM_BEGIN LineEdit(CO(a), NI(w)).copy();  TM_END }
+void   tm_lineedit_cut(tm_app* a, tm_widget w)   { TM_BEGIN LineEdit(CO(a), NI(w)).cut();   TM_END }
+void   tm_lineedit_paste(tm_app* a, tm_widget w) { TM_BEGIN LineEdit(CO(a), NI(w)).paste(); TM_END }
+void   tm_on_lineedit_selection_changed(tm_app* a, tm_widget w, TmSlot fn, void* user) {
+    TM_BEGIN tm_widget src = w; LineEdit(CO(a), NI(w)).selectionChanged().connect([fn, user, src] { TmEvent ev{TM_EV_SELECTION_CHANGED, src, 0, nullptr}; if (fn) fn(&ev, user); }); TM_END
+}
+void   tm_textarea_select_all(tm_app* a, tm_widget w) { TM_BEGIN TextArea(CO(a), NI(w)).selectAll(); TM_END }
+size_t tm_textarea_selected_text(tm_app* a, tm_widget w, char* b, size_t c) { TM_BEGIN return copyOut(TextArea(CO(a), NI(w)).selectedText(), b, c); TM_END_V(0) return 0; }
+void   tm_textarea_copy(tm_app* a, tm_widget w)  { TM_BEGIN TextArea(CO(a), NI(w)).copy();  TM_END }
+void   tm_textarea_cut(tm_app* a, tm_widget w)   { TM_BEGIN TextArea(CO(a), NI(w)).cut();   TM_END }
+void   tm_textarea_paste(tm_app* a, tm_widget w) { TM_BEGIN TextArea(CO(a), NI(w)).paste(); TM_END }
+void   tm_on_textarea_selection_changed(tm_app* a, tm_widget w, TmSlot fn, void* user) {
+    TM_BEGIN tm_widget src = w; TextArea(CO(a), NI(w)).selectionChanged().connect([fn, user, src] { TmEvent ev{TM_EV_SELECTION_CHANGED, src, 0, nullptr}; if (fn) fn(&ev, user); }); TM_END
+}
+
 /* dialogs */
 void tm_dialog_info(tm_app* a, tm_widget win, const char* msg) {
     TM_BEGIN a->app->dialogs().info(Window(CO(a), NI(win)), msg ? msg : ""); TM_END

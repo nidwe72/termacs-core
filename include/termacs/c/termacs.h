@@ -18,7 +18,7 @@ extern "C" {
 #endif
 
 /* ----- ABI version & error channel ----- */
-#define TM_ABI_VERSION 2   /* 2: P5 selection & input widgets (§5.10) */
+#define TM_ABI_VERSION 3   /* 3: text-editing surface (§5.11) on LineEdit/TextArea */
 TM_EXPORT int         tm_abi_version(void);
 
 typedef enum { TM_OK = 0, TM_ERR_INVALID_HANDLE = 1, TM_ERR_BAD_ARG = 2, TM_ERR_INTERNAL = 3 } TmStatus;
@@ -167,6 +167,20 @@ TM_EXPORT tm_widget tm_add_frame(tm_app*, tm_widget c, const char* title);
 TM_EXPORT void   tm_frame_set_title(tm_app*, tm_widget, const char* title);
 TM_EXPORT tm_widget tm_add_scrollview(tm_app*, tm_widget c);
 TM_EXPORT void   tm_scrollview_scroll_to(tm_app*, tm_widget, int x, int y);
+
+/* ----- text-editing surface (§5.11) — LineEdit + TextArea ----- */
+TM_EXPORT void   tm_lineedit_select_all(tm_app*, tm_widget);
+TM_EXPORT size_t tm_lineedit_selected_text(tm_app*, tm_widget, char* buf, size_t cap);
+TM_EXPORT void   tm_lineedit_copy(tm_app*, tm_widget);
+TM_EXPORT void   tm_lineedit_cut(tm_app*, tm_widget);
+TM_EXPORT void   tm_lineedit_paste(tm_app*, tm_widget);
+TM_EXPORT void   tm_on_lineedit_selection_changed(tm_app*, tm_widget, TmSlot, void*);
+TM_EXPORT void   tm_textarea_select_all(tm_app*, tm_widget);
+TM_EXPORT size_t tm_textarea_selected_text(tm_app*, tm_widget, char* buf, size_t cap);
+TM_EXPORT void   tm_textarea_copy(tm_app*, tm_widget);
+TM_EXPORT void   tm_textarea_cut(tm_app*, tm_widget);
+TM_EXPORT void   tm_textarea_paste(tm_app*, tm_widget);
+TM_EXPORT void   tm_on_textarea_selection_changed(tm_app*, tm_widget, TmSlot, void*);
 
 /* ----- dialogs (async, callback-result) ----- */
 TM_EXPORT void tm_dialog_info(tm_app*, tm_widget win, const char* message);
