@@ -873,6 +873,21 @@ The path-to-milestone phases are implemented and green. Build everything with `.
 
 **Layout of what was built:** `termacs-core/{include,src,backends,cabi,tests}`, `termacs-java/{src,native}`, `termacs-java-demo/`. ~30 source files; `build.sh` builds and tests all of it.
 
+### 14.1 Definition of Done
+
+A feature or wave (the R / W / T phase tables) is **done** only when *all* of the following hold — this is the contract every phase's exit criterion instantiates:
+
+1. **Vertical slice complete.** The change exists across *every* layer it touches, no stubs: C++ core (model + layout/draw/input) → C ABI (`tm_*`) → JNI shim → idiomatic binding class/method. Public C++ is the source of truth; the binding surface is language-independent.
+2. **Tested at the right layer.** A `HeadlessBackend` snapshot/unit test (C++ `ctest`) is the regression asset — it renders the *exact* cell buffer the terminal presents; the Java `HeadlessTest` mirrors the binding path. The demo is **manual/smoke, never the test layer** (§12.5). `ctest` is fully green.
+3. **Real-terminal verified.** The demo runs on a pseudo-terminal (`tools/run_*_pty.py`, **rc=0**) — it actually paints and behaves, not just compiles.
+4. **Theming + a11y basics.** New widgets define **Dark *and* Light** theme roles; new interactive widgets join the Tab focus ring and handle their keys.
+5. **ABI discipline.** Any C ABI surface change **bumps `tm_abi_version`** (and every binding's load-check), and is exported *only* through the `tm_*` / `Java_*` version scripts (no internals leak).
+6. **Spec updated.** `termacs.md` reflects the change — both the design *and* a status marker — so the spec stays the single source of truth (this DoD included).
+7. **Released & reproducible.** `termacs-core` is tagged, the binding's `FetchContent` is re-pinned to that tag, and all repos are pushed (SSH). A clean `git clone --recursive` of each repo **builds standalone** at the tag; per-repo CI is green.
+8. **No silent regressions.** Pre-existing tests/demos still pass after the change (e.g. re-backing `LineEdit` on `TextBuffer` kept the task-demo green).
+
+If any item is unmet, the work is *in progress*, not done — record it as such in the status table rather than marking it complete.
+
 ---
 
 ## 15. Repo & distribution model
