@@ -306,7 +306,7 @@ myModel.reset();                    // structure changed; re-query visible windo
 
 Scope: the milestone needs only `ListView` with eager `addItem`/`removeItem`. The pull-based `Model`, `Table` (N columns), and virtualization land in **P5** (post-milestone); tree/hierarchical models later still.
 
-### 5.10 Selection & input widgets *(P5)*
+### 5.10 Selection & input widgets *(P5 — ✅ implemented in `v0.2.0`, C ABI v2)*
 
 A second wave of widgets built on **one shared idea — options + a selection** — rendered three ways (collapsed dropdown, expanded group, list). One vocabulary (`setOptions({...})` + a selection surface) spans all of them, and the selection signal always carries the **changed index** (variant-safe over the C ABI, §7), so single- and multi-select share one signature. Eager `setOptions` is the default (small sets); a huge set can take a pull `Model` (§5.9) later.
 
@@ -545,7 +545,7 @@ The four prior open questions are now decided (details in the linked sections):
 
 | Phase | Goal | Scope |
 |---|---|---|
-| **P5** | Breadth | full `Grid`; `Table` + pull-based model/view (virtualized); `ScrollView`; **selection & input widgets** — `ComboBox`, `CheckBox`, `OptionGroup` (radio/multi), `TextArea`, `Button` variants (§5.10) — plus `ProgressBar`, `Frame`, `Spacer`; theming from file; custom-widget paint surface |
+| **P5** | Breadth | ✅ **selection & input widgets shipped** (`v0.2.0`, §5.10): `ComboBox`, `CheckBox`, `OptionGroup` (radio/multi), `TextArea`, `Button` variants, `ProgressBar`, `Frame`, `ScrollView`. **Remaining:** full `Grid`; `Table` + pull-based model/view (virtualized); `Spacer`; theming from file; custom-widget paint surface |
 | **P6** | Python & Dart | cffi + dart:ffi over the shared `libtermacs.so` — mechanical, since the ABI is already proven by Java |
 | **P7** | Android | native Android-Canvas `Backend` (beyond Termux) |
 
@@ -807,7 +807,7 @@ Gradle depends on `termacs-java`, which packages the prebuilt `libtermacsjni.so`
 
 ---
 
-## 14. Implementation status (P0–P4) — ✅ built & verified
+## 14. Implementation status (P0–P4 + P5 widget wave) — ✅ built & verified
 
 The path-to-milestone phases are implemented and green. Build everything with `./build.sh` (CMake + `javac --release 17`; the Gradle build is the canonical packaging, this script is the gradle-free equivalent).
 
@@ -818,6 +818,7 @@ The path-to-milestone phases are implemented and green. Build everything with `.
 | **P2** | Flat C ABI: opaque handles, variant `TmEvent`+`TmSlot`, copy-out strings, `tm_abi_version`, error channel, `-fvisibility=hidden` + version script (53 exports, **only `tm_*`**) | `tc_csmoke` (ctest) — plain-C drives the demo through the ABI |
 | **P3** | Java binding: JNI shim → single `libtermacsjni.so`, `sciens.termacs.*` OOP classes, callback trampolines (events cross back into Java lambdas), `tm_abi_version` checked on load | `HeadlessTest` — full TaskDemo via JNI→C ABI→core, all assertions pass |
 | **P4 ★** | `termacs-java-demo` `TaskDemo` (§13) | Runs on a real (pseudo) terminal: paints the full UI, accepts typed input (the task appears in the list), F10▸File▸Quit→confirm→Yes exits cleanly. Driven headlessly by `tools/run_demo_pty.py` (rc=0). |
+| **P5 widgets** | §5.10 selection & input widgets across every layer (core → **C ABI v2** → JNI → Java): `ComboBox`, `CheckBox`, `OptionGroup` (radio + multi), `ProgressBar`, `TextArea`, `Frame`, `ScrollView`, `Button` variants + default-button Enter routing; new Dark/Light theme roles; `termacs-core` tagged **`v0.2.0`** | `tc_widgets` (ctest) snapshot asserts every control renders + holds state; `WidgetGallery` demo verified on a real pty (`tools/run_gallery_pty.py`, 9/9 controls, rc=0); a clean GitHub clone builds the binding against the `v0.2.0` tag |
 
 **Verified everywhere it matters via `HeadlessBackend`** (which renders the *exact* cell buffer the terminal backend presents): the framework, all widgets, layout, signals, menus, dialogs, and the Java binding's callbacks all pass automated tests in C++, C, and Java. The **real tvision terminal backend** is additionally verified end-to-end: `tools/run_demo_pty.py` launches the Java demo on a pseudo-terminal, types a task, drives the menu/dialog, and confirms the rendered frames contain the expected UI.
 
