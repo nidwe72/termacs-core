@@ -249,6 +249,8 @@ ok.setStyle({ .fg = Color::BrightWhite, .bg = Color::Blue, .bold = true });
 
 Themes are: **built-in** (named), **programmatic** (build/modify a `Theme`), or **loaded from a flat declarative file** (`role = style` lines — TOML-ish, no selectors). File loading lands in P5 (post-milestone); built-in + programmatic are enough for the milestone.
 
+**Built-in themes:** `Dark`, `Light`, and **`PhosphorHarmony`** — a green-screen palette built from a single **semantic** scheme (Bootstrap-ish): green is the brand/success family (dim→mid→bright phosphor for borders/text/focus), **amber** is the single accent (`Accent` role + the primary/focus/title roles — default button, focused control, window/frame titles, the ComboBox ▾), and **gray** is info/muted (`Muted` role — placeholders, disabled, status hints) on a dark-gray background. Two roles were added to express this: `Accent` (emphasis hue) and `Muted` (info). A formal `Danger` accent (amber-orange) is deferred. ✅ shipped in `v0.4.0`, C ABI v4 (`TM_THEME_PHOSPHOR_HARMONY`).
+
 #### Custom-widget painting *(resolves open question Q1)*
 
 `onPaint` is available in **all four languages**, not C++-only. The boundary cost is acceptable because:
@@ -416,6 +418,24 @@ void                copy();  void cut();  void paste();   // register + OSC 52
 Signal<>&           selectionChanged();
 ```
 Java: `selectAll()`, `copy()/cut()/paste()`, `onSelectionChanged(...)`. **Status: ✅ implemented in `v0.3.0` (C ABI v3)** — backed by vendored **librope** (not Boost.Text; chosen at the T0 gate for an offset-based, zero-system-dep fit, §5.11.1's seam preserved). Unicode word-break is a codepoint heuristic for now.
+
+### 5.12 Control styles *(actuator decoration — ✅ implemented in `v0.4.0`, C ABI v4)*
+
+The **shape** of the "actuator" widgets — `Button`, `ComboBox`, `LineEdit` — is a knob **orthogonal to the color `Theme`** (§5.6): the theme owns *colors*, the control style owns *glyphs + geometry*. Keeping them separate means *N styles + M themes*, never *N×M*.
+
+```cpp
+enum class ControlStyle { Inherit, Plain, Brackets, Framed };
+app.setControlStyle(ControlStyle::Brackets);   // app-wide default
+okButton.setControlStyle(ControlStyle::Framed); // per-widget override
+```
+
+| Style | Look | Geometry |
+|---|---|---|
+| `Plain` | fill only, no border | 1 row |
+| `Brackets` *(default)* | `[ text ]` — matches the historical button look (so it's a no-regression default) | 1 row |
+| `Framed` | rounded `╭╮╰╯` box around the control | **3 rows** |
+
+**Resolution:** a widget draws with its own style if set, else the app-wide default; the per-widget sentinel is `Inherit`. The only layout consequence is that `Framed` reports a 3-row preferred size — contained entirely in the three actuators' `measure()`. State marks elsewhere are independent of this knob and were refreshed to GUI glyphs: `CheckBox`/multi-`OptionGroup` use `☑`/`☐`, radio-`OptionGroup` uses `◉`/`○`, the `ComboBox` shows an amber `▾` and a gray (`Muted`) placeholder; content `Frame`s use the rounded box. **C ABI:** `TmControlStyle` + `tm_app_set_control_style` + `tm_widget_set_control_style` (the change that drove the **v3 → v4** bump); Java: `ControlStyle`, `App.setControlStyle`, `Widget.setControlStyle`.
 
 ---
 
@@ -853,7 +873,7 @@ Gradle depends on `termacs-java`, which packages the prebuilt `libtermacsjni.so`
 
 ---
 
-## 14. Implementation status (P0–P4 + P5 widget wave) — ✅ built & verified
+## 14. Implementation status (P0–P4 + P5 widgets + text editing + W8) — ✅ built & verified
 
 The path-to-milestone phases are implemented and green. Build everything with `./build.sh` (CMake + `javac --release 17`; the Gradle build is the canonical packaging, this script is the gradle-free equivalent).
 
@@ -866,6 +886,7 @@ The path-to-milestone phases are implemented and green. Build everything with `.
 | **P4 ★** | `termacs-java-demo` `TaskDemo` (§13) | Runs on a real (pseudo) terminal: paints the full UI, accepts typed input (the task appears in the list), F10▸File▸Quit→confirm→Yes exits cleanly. Driven headlessly by `tools/run_demo_pty.py` (rc=0). |
 | **P5 widgets** | §5.10 selection & input widgets across every layer (core → **C ABI v2** → JNI → Java): `ComboBox`, `CheckBox`, `OptionGroup` (radio + multi), `ProgressBar`, `TextArea`, `Frame`, `ScrollView`, `Button` variants + default-button Enter routing; new Dark/Light theme roles; `termacs-core` tagged **`v0.2.0`** | `tc_widgets` (ctest) snapshot asserts every control renders + holds state; `WidgetGallery` demo verified on a real pty (`tools/run_gallery_pty.py`, 9/9 controls, rc=0); a clean GitHub clone builds the binding against the `v0.2.0` tag |
 | **Text editing** | §5.11 modern editing on `LineEdit` + `TextArea` (core → **C ABI v3** → JNI → Java): librope-backed `TextBuffer`; char/word/line/doc nav, Shift-select, Ctrl+A/C/X/V, delete-word, multi-line + scrollbar, selection highlight, bracketed-paste events, OSC 52 write-through; `termacs-core` tagged **`v0.3.0`** | `tc_librope` + `tc_textbuffer` + `tc_edit` (ctest, 7/7) cover the rope, model, and widget shortcuts/selection/clipboard; HeadlessTest + `WidgetGallery` green |
+| **W8 — Phosphor Harmony + ControlStyle** | §5.6 `PhosphorHarmony` green/amber/gray theme (new `Accent`/`Muted` roles) + §5.12 `ControlStyle` (Plain/Brackets/Framed, global + per-widget) across every layer (core → **C ABI v4** → JNI → Java); refreshed marks (`☑ ◉`), rounded frames; demos default to Phosphor + Brackets with live theme/style cycling; `termacs-core` tagged **`v0.4.0`**, `termacs-java` FetchContent re-pinned to it, all three repos pushed (SSH). | `tc_style` + `tc_widgets` (ctest, 8/8 green) assert each style × the green theme; `tc_csmoke` drives the new ABI; `HeadlessTest` green; `run_demo_pty.py` **rc=0** + `run_gallery_pty.py` **9/9 rc=0** on a real pty |
 
 **Verified everywhere it matters via `HeadlessBackend`** (which renders the *exact* cell buffer the terminal backend presents): the framework, all widgets, layout, signals, menus, dialogs, and the Java binding's callbacks all pass automated tests in C++, C, and Java. The **real tvision terminal backend** is additionally verified end-to-end: `tools/run_demo_pty.py` launches the Java demo on a pseudo-terminal, types a task, drives the menu/dialog, and confirms the rendered frames contain the expected UI.
 

@@ -6,6 +6,7 @@
 #include "handle.hpp"
 #include "signal.hpp"
 #include "sizing.hpp"
+#include "style.hpp"   // ControlStyle
 
 namespace termacs {
 
@@ -26,6 +27,7 @@ public:
     void setFocusable(bool v);
     void setFocus();
     void setSizing(Axis axis, Sizing s);
+    void setControlStyle(ControlStyle s);   // §5.12; per-widget override of the app default
     void remove();   // destroys this subtree; invalidates handles into it
 
 protected:

@@ -35,6 +35,7 @@ public:
     Rect                bounds{};
     Sizing              hsize{}, vsize{};
     bool                visible = true, enabled = true, focusable = false;
+    ControlStyle        ctrlStyle = ControlStyle::Inherit;  // §5.12; Inherit ⇒ use Core's global
 
     Sizing& sizing(Axis a) { return a == Axis::Horizontal ? hsize : vsize; }
 
@@ -257,8 +258,14 @@ public:
     std::vector<uint32_t>              gens;
     std::vector<uint32_t>              freeList;
 
-    Backend* backend = nullptr;
-    Theme    theme = Theme::builtin(Theme::Builtin::Dark);
+    Backend*     backend = nullptr;
+    Theme        theme = Theme::builtin(Theme::Builtin::Dark);
+    ControlStyle controlStyle = ControlStyle::Brackets;   // §5.12 app-wide default
+
+    // Resolve the effective control style for a node (own override, else global).
+    ControlStyle styleFor(const Node& n) const {
+        return n.ctrlStyle == ControlStyle::Inherit ? controlStyle : n.ctrlStyle;
+    }
 
     std::vector<NodeId> windows;   // root windows (z-order)
     std::vector<NodeId> popups;    // floating layer: open menu / dialogs (top = last)

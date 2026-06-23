@@ -39,6 +39,7 @@ Application::~Application() = default;
 
 void         Application::setTheme(Theme t) { d_->core->theme = std::move(t); }
 const Theme& Application::theme() const     { return d_->core->theme; }
+void         Application::setControlStyle(ControlStyle s) { d_->core->controlStyle = s; }
 Core&        Application::core()            { return *d_->core; }
 Backend&     Application::backend()         { return *d_->backend; }
 

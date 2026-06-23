@@ -21,6 +21,7 @@ void Widget::setEnabled(bool v)   { req(core_, id_).enabled = v; }
 void Widget::setFocusable(bool v) { req(core_, id_).focusable = v; }
 void Widget::setFocus()           { req(core_, id_); core_->setFocus(id_); }
 void Widget::setSizing(Axis a, Sizing s) { req(core_, id_).sizing(a) = s; }
+void Widget::setControlStyle(ControlStyle s) { req(core_, id_).ctrlStyle = s; }
 void Widget::remove()             { if (core_) core_->destroy(id_); }
 
 // ----- Container --------------------------------------------------------------

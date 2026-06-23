@@ -98,6 +98,13 @@ int main(void) {
     tm_app_feed_key(a, TM_KEY_ENTER, 0);   /* Yes */
     assert(confirmed == 1);
 
+    /* §5.12 control styles + PhosphorHarmony theme across the ABI */
+    tm_app_set_theme(a, TM_THEME_PHOSPHOR_HARMONY);
+    tm_app_set_control_style(a, TM_STYLE_FRAMED);
+    tm_widget_set_control_style(a, input, TM_STYLE_BRACKETS);   /* per-widget override */
+    tm_app_render(a);
+    assert(row_has(a, "╭"));                                    /* framed Add ⇒ rounded box */
+
     /* error channel: a stale handle sets last_status, doesn't crash */
     tm_button_set_text(a, (tm_widget)0xDEADBEEFu, "x");
     assert(tm_last_status() == TM_ERR_INVALID_HANDLE);

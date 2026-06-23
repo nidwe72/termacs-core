@@ -34,6 +34,7 @@ public:
 
     void   setTheme(Theme t);
     const  Theme& theme() const;
+    void   setControlStyle(ControlStyle s);   // §5.12 app-wide default actuator style
 
     Window createWindow(const std::string& title);
 

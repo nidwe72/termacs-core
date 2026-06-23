@@ -111,11 +111,13 @@ void Canvas::vline(int x, int y, int len, char32_t ch, Style s) {
     for (int i = 0; i < len; ++i) set(x, y + i, ch, s);
 }
 
-void Canvas::box(Rect r, Style s) {
+void Canvas::box(Rect r, Style s, bool rounded) {
     if (r.w < 2 || r.h < 2) return;
     int x0 = r.x, y0 = r.y, x1 = r.right() - 1, y1 = r.bottom() - 1;
-    set(x0, y0, U'┌', s); set(x1, y0, U'┐', s);   // ┌ ┐
-    set(x0, y1, U'└', s); set(x1, y1, U'┘', s);   // └ ┘
+    char32_t tl = rounded ? U'╭' : U'┌', tr = rounded ? U'╮' : U'┐';
+    char32_t bl = rounded ? U'╰' : U'└', br = rounded ? U'╯' : U'┘';
+    set(x0, y0, tl, s); set(x1, y0, tr, s);       // ╭┌ ╮┐
+    set(x0, y1, bl, s); set(x1, y1, br, s);       // ╰└ ╯┘
     hline(x0 + 1, y0, r.w - 2, U'─', s);               // ─
     hline(x0 + 1, y1, r.w - 2, U'─', s);
     vline(x0, y0 + 1, r.h - 2, U'│', s);               // │

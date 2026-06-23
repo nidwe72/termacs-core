@@ -219,7 +219,14 @@ void LabelNode::draw(Core&, Canvas& cv, const Theme& th) {
     cv.drawText(bounds.x, bounds.y, text, th.get(Role::Label));
 }
 
-Size ButtonNode::contentSize(Core&, Backend& be) { return {be.measureWidth(text) + 4, 1}; }
+Size ButtonNode::contentSize(Core& core, Backend& be) {
+    int tw = be.measureWidth(text);
+    switch (core.styleFor(*this)) {
+        case ControlStyle::Plain:  return {tw + 2, 1};
+        case ControlStyle::Framed: return {tw + 4, 3};
+        default:                   return {tw + 4, 1};   // Brackets
+    }
+}
 void ButtonNode::draw(Core& core, Canvas& cv, const Theme& th) {
     bool foc = core.focused == self;
     Role base = Role::Button;
@@ -227,8 +234,24 @@ void ButtonNode::draw(Core& core, Canvas& cv, const Theme& th) {
     Style st = th.get(foc ? Role::ButtonFocused : base);
     if (isDefault) st.bold = true;
     cv.fill(bounds, st);
-    std::string label = "[ " + text + " ]";
-    cv.drawText(bounds.x, bounds.y, label, st);
+    switch (core.styleFor(*this)) {
+        case ControlStyle::Framed:
+            if (bounds.h >= 2 && bounds.w >= 2) {
+                cv.box(bounds, st, true);
+                int tw = textWidth(text);
+                int tx = std::max(bounds.x + 1, bounds.x + (bounds.w - tw) / 2);
+                cv.drawText(tx, bounds.y + bounds.h / 2, text, st);
+            } else {
+                cv.drawText(bounds.x, bounds.y, "[ " + text + " ]", st);   // too short to frame
+            }
+            break;
+        case ControlStyle::Plain:
+            cv.drawText(bounds.x + 1, bounds.y, text, st);
+            break;
+        default:   // Brackets
+            cv.drawText(bounds.x, bounds.y, "[ " + text + " ]", st);
+            break;
+    }
 }
 bool ButtonNode::handleKey(Core&, const KeyEvent& ev) {
     if (ev.key == Key::Enter || (ev.key == Key::Char && ev.ch == U' ')) { clicked.emit(); return true; }
@@ -291,13 +314,30 @@ int applyEditKey(Core& core, TextBuffer& buf, const KeyEvent& ev) {
 }
 } // namespace
 
-Size LineEditNode::contentSize(Core&, Backend& be) { return {std::max(be.measureWidth(buf.text()) + 1, 6), 1}; }
+Size LineEditNode::contentSize(Core& core, Backend& be) {
+    int w = std::max(be.measureWidth(buf.text()) + 1, 6);
+    switch (core.styleFor(*this)) {
+        case ControlStyle::Plain:  return {w, 1};
+        case ControlStyle::Framed: return {w + 4, 3};
+        default:                   return {w + 4, 1};   // Brackets
+    }
+}
 void LineEditNode::draw(Core& core, Canvas& cv, const Theme& th) {
     bool foc = core.focused == self;
     Style st = th.get(foc ? Role::InputFocused : Role::Input);
     cv.fill(bounds, st);
+    ControlStyle cs = core.styleFor(*this);
+    Rect inner = bounds;
+    if (cs == ControlStyle::Framed && bounds.h >= 2 && bounds.w >= 4) {
+        cv.box(bounds, st, true);
+        inner = {bounds.x + 2, bounds.y + bounds.h / 2, bounds.w - 4, 1};
+    } else if (cs == ControlStyle::Brackets && bounds.w >= 4) {
+        cv.drawText(bounds.x, bounds.y, "[ ", st);
+        cv.drawText(bounds.right() - 2, bounds.y, " ]", st);
+        inner = {bounds.x + 2, bounds.y, bounds.w - 4, 1};
+    }
     auto [lo, hi] = buf.selectionRange();
-    renderRow(cv, bounds.x, bounds.y, bounds.w, st, buf.text(),
+    renderRow(cv, inner.x, inner.y, inner.w, st, buf.text(),
               buf.hasSelection() ? lo : 0, buf.hasSelection() ? hi : 0, foc ? buf.cursor() : -1);
 }
 bool LineEditNode::handleKey(Core& core, const KeyEvent& ev) {
@@ -349,7 +389,7 @@ void CheckBoxNode::draw(Core& core, Canvas& cv, const Theme& th) {
     bool foc = core.focused == self;
     Style st = th.get(foc ? Role::OptionFocused : Role::Option);
     cv.fill(bounds, st);
-    std::string label = std::string(checked ? "[x] " : "[ ] ") + text;
+    std::string label = std::string(checked ? "☑ " : "☐ ") + text;
     cv.drawText(bounds.x, bounds.y, label, st);
 }
 bool CheckBoxNode::handleKey(Core&, const KeyEvent& ev) {
@@ -373,10 +413,10 @@ void OptionGroupNode::draw(Core& core, Canvas& cv, const Theme& th) {
         bool sel = i < on.size() && on[i];
         bool cur = foc && (int)i == cursor;
         Style st = th.get(cur ? Role::OptionFocused : Role::Option);
-        const char* mark = (mode == 0) ? (sel ? "(*) " : "( ) ") : (sel ? "[x] " : "[ ] ");
+        const char* mark = (mode == 0) ? (sel ? "◉ " : "○ ") : (sel ? "☑ " : "☐ ");
         std::string label = std::string(mark) + options[i];
         if (orient == Axis::Vertical) { cv.drawText(x, y, label, st); ++y; }
-        else { cv.drawText(x, y, label, st); x += (int)label.size() + 1; }
+        else { cv.drawText(x, y, label, st); x += textWidth(label) + 1; }
     }
 }
 bool OptionGroupNode::handleKey(Core&, const KeyEvent& ev) {
@@ -394,18 +434,36 @@ bool OptionGroupNode::handleKey(Core&, const KeyEvent& ev) {
     return false;
 }
 
-Size ComboBoxNode::contentSize(Core&, Backend& be) {
+Size ComboBoxNode::contentSize(Core& core, Backend& be) {
     int w = be.measureWidth(placeholder);
     for (auto& s : options) w = std::max(w, be.measureWidth(s));
-    return {std::max(w + 4, 8), 1};
+    w = std::max(w + 3, 8);   // 1 pad + arrow + trailing
+    switch (core.styleFor(*this)) {
+        case ControlStyle::Plain:  return {w, 1};
+        case ControlStyle::Framed: return {w + 4, 3};
+        default:                   return {w + 4, 1};   // Brackets
+    }
 }
 void ComboBoxNode::draw(Core& core, Canvas& cv, const Theme& th) {
     bool foc = core.focused == self;
     Style st = th.get(foc ? Role::ComboFocused : Role::Combo);
     cv.fill(bounds, st);
-    std::string label = (sel >= 0 && sel < (int)options.size()) ? options[sel] : placeholder;
-    cv.drawText(bounds.x + 1, bounds.y, label, st);
-    if (bounds.w >= 3) cv.drawText(bounds.right() - 2, bounds.y, "v", st);
+    bool ph = !(sel >= 0 && sel < (int)options.size());
+    std::string label = ph ? placeholder : options[sel];
+    Style labelSt = ph ? th.get(Role::Muted) : st; labelSt.bg = st.bg;   // gray placeholder
+    Style arrowSt = th.get(Role::Accent);          arrowSt.bg = st.bg;   // amber ▾
+
+    ControlStyle cs = core.styleFor(*this);
+    int rowY = bounds.y, labelX = bounds.x + 1, arrowX = bounds.right() - 2;
+    bool framed   = cs == ControlStyle::Framed   && bounds.h >= 2 && bounds.w >= 4;
+    bool brackets = cs == ControlStyle::Brackets && bounds.w >= 5;
+    if (framed || brackets) { labelX = bounds.x + 2; arrowX = bounds.right() - 3; }
+    if (framed) rowY = bounds.y + bounds.h / 2;
+
+    cv.drawText(labelX, rowY, label, labelSt);
+    if (framed) cv.box(bounds, st, true);
+    else if (brackets) { cv.drawText(bounds.x, bounds.y, "[ ", st); cv.drawText(bounds.right() - 2, bounds.y, " ]", st); }
+    if (arrowX >= bounds.x && arrowX < bounds.right()) cv.set(arrowX, rowY, U'▾', arrowSt);
 }
 bool ComboBoxNode::handleKey(Core&, const KeyEvent& ev) {
     if (open) {
@@ -512,7 +570,7 @@ bool TextAreaNode::handleKey(Core& core, const KeyEvent& ev) {
 
 // ----- Frame / ScrollView (containers) ----------------------------------------
 void FrameNode::draw(Core&, Canvas& cv, const Theme& th) {
-    cv.box(bounds, th.get(Role::FrameBorder));
+    cv.box(bounds, th.get(Role::FrameBorder), true);   // §5.12 rounded house style
     if (!title.empty() && bounds.w > 4) {
         std::string t = " " + title + " ";
         cv.drawText(bounds.x + 2, bounds.y, t, th.get(Role::FrameTitle));

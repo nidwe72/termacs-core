@@ -57,13 +57,13 @@ int main() {
     assert(ta.text() == "hello\nworld");
 
     // rendered marks
-    assert(anyRowContains(fb, "(*) Medium"));      // radio selected
-    assert(anyRowContains(fb, "[x] Bold"));        // multi selected
+    assert(anyRowContains(fb, "◉ Medium"));        // radio selected (◉/○)
+    assert(anyRowContains(fb, "☑ Bold"));          // multi selected (☑/☐)
     assert(anyRowContains(fb, "Choose..."));       // combo placeholder
     assert(anyRowContains(fb, "50%"));             // progress bar
     assert(anyRowContains(fb, "Notes"));           // frame title
     assert(anyRowContains(fb, "hello"));           // text area
-    assert(anyRowContains(fb, "[ OK ]"));          // primary button
+    assert(anyRowContains(fb, "[ OK ]"));          // primary button (Brackets default)
 
     std::cout << "widgets snapshot OK\n";
     return 0;

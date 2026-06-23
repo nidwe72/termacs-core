@@ -24,12 +24,15 @@ enum class Role {
     ProgressTrack, ProgressFill,
     FrameBorder, FrameTitle,
     ScrollTrack, ScrollThumb,
+    // Semantic accents (§5.6): Accent = primary/emphasis hue, Muted = info/disabled
+    Accent, Muted,
     _Count
 };
 
 class Theme {
 public:
-    enum class Builtin { Dark, Light };
+    // Dark/Light = classic; PhosphorHarmony = green/amber/gray "green-screen" palette (§5.6).
+    enum class Builtin { Dark, Light, PhosphorHarmony };
 
     Style get(Role r) const { return styles_[static_cast<std::size_t>(r)]; }
     void  set(Role r, Style s) { styles_[static_cast<std::size_t>(r)] = s; }

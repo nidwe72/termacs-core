@@ -18,7 +18,7 @@ extern "C" {
 #endif
 
 /* ----- ABI version & error channel ----- */
-#define TM_ABI_VERSION 3   /* 3: text-editing surface (§5.11) on LineEdit/TextArea */
+#define TM_ABI_VERSION 4   /* 4: control styles + PhosphorHarmony theme (§5.12) */
 TM_EXPORT int         tm_abi_version(void);
 
 typedef enum { TM_OK = 0, TM_ERR_INVALID_HANDLE = 1, TM_ERR_BAD_ARG = 2, TM_ERR_INTERNAL = 3 } TmStatus;
@@ -41,7 +41,9 @@ typedef enum {
 } TmKey;
 
 typedef enum { TM_AXIS_H = 0, TM_AXIS_V = 1 } TmAxis;
-typedef enum { TM_THEME_DARK = 0, TM_THEME_LIGHT = 1 } TmTheme;
+typedef enum { TM_THEME_DARK = 0, TM_THEME_LIGHT = 1, TM_THEME_PHOSPHOR_HARMONY = 2 } TmTheme;
+/* Actuator decoration style — Button/ComboBox/LineEdit (§5.12). Inherit ⇒ app default. */
+typedef enum { TM_STYLE_INHERIT = 0, TM_STYLE_PLAIN = 1, TM_STYLE_BRACKETS = 2, TM_STYLE_FRAMED = 3 } TmControlStyle;
 
 /* ----- the one variant event + slot ----- */
 typedef enum {
@@ -65,6 +67,7 @@ TM_EXPORT tm_app*  tm_app_new_headless(int w, int h);
 TM_EXPORT tm_app*  tm_app_new_terminal(void);
 TM_EXPORT void     tm_app_free(tm_app*);
 TM_EXPORT void     tm_app_set_theme(tm_app*, TmTheme);
+TM_EXPORT void     tm_app_set_control_style(tm_app*, TmControlStyle);   /* §5.12 global default */
 TM_EXPORT int      tm_app_run(tm_app*);
 TM_EXPORT void     tm_app_quit(tm_app*, int code);
 TM_EXPORT void     tm_app_post(tm_app*, TmThunk fn, void* user);
@@ -99,6 +102,7 @@ TM_EXPORT tm_widget tm_add_vbox(tm_app*, tm_widget c);
 /* ----- common widget ops ----- */
 TM_EXPORT void tm_widget_set_sizing(tm_app*, tm_widget w, TmAxis axis, int min, int preferred, int max, int stretch);
 TM_EXPORT void tm_widget_set_focus(tm_app*, tm_widget w);
+TM_EXPORT void tm_widget_set_control_style(tm_app*, tm_widget w, TmControlStyle);  /* §5.12 per-widget override */
 TM_EXPORT void tm_widget_remove(tm_app*, tm_widget w);
 
 /* ----- leaf widgets ----- */

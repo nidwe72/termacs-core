@@ -63,6 +63,10 @@ add_executable(tc_edit tests/cpp/edit_test.cpp)
 target_link_libraries(tc_edit termacs)
 add_test(NAME edit COMMAND tc_edit)
 
+add_executable(tc_style tests/cpp/style_test.cpp)
+target_link_libraries(tc_style termacs)
+add_test(NAME style COMMAND tc_style)
+
 # Shared C-ABI library (libtermacs.so) — what the language bindings link against
 add_library(termacs_c SHARED cabi/cabi.cpp
     src/cell.cpp src/theme.cpp src/core.cpp src/widget.cpp src/application.cpp

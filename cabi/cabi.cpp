@@ -98,7 +98,15 @@ tm_app* tm_app_new_terminal(void) {
 void tm_app_free(tm_app* a) { delete a; }
 
 void tm_app_set_theme(tm_app* a, TmTheme t) {
-    TM_BEGIN a->app->setTheme(Theme::builtin(t == TM_THEME_LIGHT ? Theme::Builtin::Light : Theme::Builtin::Dark)); TM_END
+    TM_BEGIN
+        Theme::Builtin b = t == TM_THEME_LIGHT             ? Theme::Builtin::Light
+                         : t == TM_THEME_PHOSPHOR_HARMONY  ? Theme::Builtin::PhosphorHarmony
+                                                           : Theme::Builtin::Dark;
+        a->app->setTheme(Theme::builtin(b));
+    TM_END
+}
+void tm_app_set_control_style(tm_app* a, TmControlStyle s) {
+    TM_BEGIN a->app->setControlStyle((ControlStyle)s); TM_END
 }
 int  tm_app_run(tm_app* a)            { TM_BEGIN return a->app->run(); TM_END_V(0) return 0; }
 void tm_app_quit(tm_app* a, int code) { TM_BEGIN a->app->quit(code); TM_END }
@@ -154,6 +162,7 @@ void tm_widget_set_sizing(tm_app* a, tm_widget w, TmAxis ax, int mn, int pref, i
     TM_END
 }
 void tm_widget_set_focus(tm_app* a, tm_widget w)  { TM_BEGIN Widget(CO(a), NI(w)).setFocus(); TM_END }
+void tm_widget_set_control_style(tm_app* a, tm_widget w, TmControlStyle s) { TM_BEGIN Widget(CO(a), NI(w)).setControlStyle((ControlStyle)s); TM_END }
 void tm_widget_remove(tm_app* a, tm_widget w)     { TM_BEGIN Widget(CO(a), NI(w)).remove(); TM_END }
 
 /* leaves */

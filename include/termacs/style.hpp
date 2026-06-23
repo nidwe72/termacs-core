@@ -40,4 +40,9 @@ struct Style {
     bool  reverse = false;
 };
 
+// Decoration style for the "actuator" widgets — Button, ComboBox, LineEdit (§5.12).
+// Orthogonal to the color Theme: this is glyphs/geometry, the theme is colors.
+// `Inherit` (per-widget default) resolves to the app-wide global default.
+enum class ControlStyle : int { Inherit = 0, Plain = 1, Brackets = 2, Framed = 3 };
+
 } // namespace termacs

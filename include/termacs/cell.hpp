@@ -59,8 +59,8 @@ public:
     void fill(Rect r, Style s);
     void hline(int x, int y, int len, char32_t ch, Style s);
     void vline(int x, int y, int len, char32_t ch, Style s);
-    // Box-drawing frame around r (single line).
-    void box(Rect r, Style s);
+    // Box-drawing frame around r (single line). rounded ⇒ ╭╮╰╯ corners, else ┌┐└┘.
+    void box(Rect r, Style s, bool rounded = false);
 
     // A sub-canvas clipped to r (intersected with the current clip).
     Canvas sub(Rect r) const { return Canvas(buf_, r & clip_); }
